@@ -42,7 +42,7 @@ research-company/
 
 Pick one of:
 
-- **Container (recommended)** — Docker ≥ 24 with Compose v2, *or* Podman ≥ 4 with `podman-compose`. Nothing else needs to be installed; the image ships TeX Live, compilers, Python, Rust, Node, Claude Code, and `uv`.
+- **Container (recommended)** — Docker ≥ 24 or Podman ≥ 4. Compose (`docker compose` / `podman-compose`) is optional; the walkthrough below shows both paths. Nothing else needs to be installed; the image ships TeX Live, compilers, Python, Rust, Node, Claude Code, and `uv`.
 - **Bare metal** — Linux with Claude Code, `uv`, TeX Live (XeLaTeX + `latexmk`), `gcc`/`g++`/`cmake`, and a recent Rust toolchain already installed.
 
 Either way, you need a Claude Code account already authenticated on the host (`claude` login flow completed once).
@@ -57,19 +57,21 @@ This is the complete walkthrough for a first-time user. Each step has a verifica
 
 ### Step 1 — Install and verify your container runtime
 
-Install Docker (with Compose v2) or Podman (with `podman-compose`). Then:
+Install Docker or Podman. Compose (`docker compose` / `podman-compose`) is recommended but optional.
 
 ```bash
 # Docker
-docker --version && docker compose version
-# Expected: both commands print version numbers, no errors.
+docker --version
+docker compose version     # optional — skip if you don't have Compose
 
 # OR Podman
-podman --version && podman-compose --version
-# Expected: both commands print version numbers, no errors.
+podman --version
+podman-compose --version   # optional — skip if you don't have podman-compose
 ```
 
-If either subcommand is missing, install the missing piece before continuing. The rest of this guide uses `docker compose`; substitute `podman-compose` throughout if you're on Podman.
+Expected: each installed command prints a version, no errors. If Compose is missing, the walkthrough will show you the equivalent plain `docker run` / `podman run` commands; nothing else changes.
+
+The rest of this guide uses `docker` / `docker compose` in examples. Substitute `podman` / `podman-compose` throughout if you're on Podman — the flags are identical.
 
 ### Step 2 — Authenticate Claude Code on the host
 
@@ -93,8 +95,18 @@ If `~/.claude` is empty, the login didn't complete — retry before continuing.
 
 ### Step 3 — Build the container image
 
+**With Compose:**
+
 ```bash
 docker compose build
+```
+
+**Without Compose (plain `docker` / `podman`):**
+
+```bash
+docker build -t research-company:latest .
+# Or with Podman:
+# podman build -t research-company:latest .
 ```
 
 Expected: a successful build ending in something like `naming to docker.io/library/research-company:latest`.
@@ -110,9 +122,35 @@ docker image ls research-company
 
 ### Step 4 — Enter the container
 
+**With Compose:**
+
 ```bash
 docker compose run --rm research
 ```
+
+**Without Compose (plain `docker` / `podman`):**
+
+```bash
+# Docker
+docker run --rm -it \
+  -v "$PWD":/workspace \
+  -v "$HOME/.claude":/root/.claude \
+  -w /workspace \
+  research-company:latest
+
+# Podman (rootless: host UID maps to root-in-container, so bind mounts just work)
+podman run --rm -it \
+  -v "$PWD":/workspace \
+  -v "$HOME/.claude":/root/.claude \
+  -w /workspace \
+  research-company:latest
+```
+
+The two bind mounts are the important part:
+- `$PWD → /workspace` makes this repository visible inside the container.
+- `$HOME/.claude → /root/.claude` forwards your Claude Code auth (and any settings / MCP registrations) into the container.
+
+> If you also want the host's `~/.claude.json` visible inside the container (e.g. to inherit host-scope MCP registrations), add `-v "$HOME/.claude.json":/root/.claude.json` to the command — **but** run `touch ~/.claude.json` on the host first, or the daemon will create it as a directory and Claude Code will fail to start.
 
 You should land in an interactive shell at `/workspace`. Verify that the toolchain is present:
 
