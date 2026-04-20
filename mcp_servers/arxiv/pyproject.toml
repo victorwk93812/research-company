@@ -1,0 +1,14 @@
+[project]
+name = "arxiv-mcp"
+version = "0.1.0"
+description = "MCP server exposing arxiv search and fetch to Claude Code."
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "arxiv>=2.1.0",
+    "pypdf>=4.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+arxiv-mcp-server = "arxiv_mcp_server:main"

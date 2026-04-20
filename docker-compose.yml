@@ -1,0 +1,30 @@
+# Usage:
+#   docker compose build         # or: podman-compose build
+#   docker compose run --rm research
+#
+# The container bind-mounts the repo at /workspace and your host ~/.claude
+# directory at /root/.claude so Claude Code auth and MCP registrations carry
+# over from your host session.
+services:
+  research:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: research-company:latest
+    container_name: research-company
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    environment:
+      TERM: ${TERM:-xterm-256color}
+    volumes:
+      # The repo itself.
+      - .:/workspace
+      # Claude Code auth + per-user settings + MCP registrations live here.
+      - ${HOME}/.claude:/root/.claude
+      # Optional: share the host's global Claude config (including host-scope
+      # MCP registrations). If you enable this line, make sure the host file
+      # actually exists first (`touch ~/.claude.json`) — otherwise Docker
+      # will create it as a directory and break Claude Code.
+      # - ${HOME}/.claude.json:/root/.claude.json
+    command: /bin/bash

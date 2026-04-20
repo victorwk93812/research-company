@@ -1,0 +1,16 @@
+.git
+.gitignore
+runs/
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/node_modules/
+*.log
+*.pdf
+*.aux
+*.fdb_latexmk
+*.fls
+*.out
+*.toc
+*.synctex.gz
+.DS_Store
