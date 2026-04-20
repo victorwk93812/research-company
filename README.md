@@ -1,183 +1,268 @@
-# 🔬 The Nightly Research Company: Autonomous Lab Framework
+# The Nightly Research Company
 
-This repository houses an autonomous, multi-agent AI research framework driven by Claude Code. It is designed to run unsupervised overnight on a Linux lab server, grinding through complex theoretical physics derivations, algorithm design, and high-performance computing implementations.
+An autonomous, multi-agent research framework driven by Claude Code. Given a single `instruction.md`, it cycles through five specialized personas — Researcher, RA Skeptic, LaTeX Writer, Python Engineer, Review Board — to produce a grounded theoretical draft, a rigorous critique, a benchmarked Python prototype, and a compiled XeLaTeX report, all unattended.
 
-By the time you wake up, the framework will have produced theoretical drafts, rigorous mathematical critiques, optimized Python simulations, and a compiled XeLaTeX report of the findings.
+The system avoids LLM context collapse by using **file-based memory** and a **static persona state machine**: Claude physically reads each persona file before adopting its role, then writes its output to disk before the next persona reads it back.
 
-## 🏗️ Architecture Overview
+---
 
-The system bypasses standard LLM context-collapse and hallucination loops by utilizing **File-Based Memory** and a **Static Persona State Machine**. Claude Code sequentially adopts specialized personas, reading intermediate `.md`, `.py`, and `.tex` files to anchor its context before executing the next phase.
+## Architecture
 
-### Directory Structure
 ```text
-/research-company
-├── README.md                  <-- This file
-├── CLAUDE.md                  <-- Master directives auto-loaded by Claude
-├── Dockerfile                 <-- Container image (docker + podman compatible)
-├── docker-compose.yml         <-- Compose file (docker compose / podman-compose)
+research-company/
+├── README.md                   This file
+├── CLAUDE.md                   Master directives auto-loaded by Claude Code
+├── Dockerfile                  Container image (works with docker + podman)
+├── docker-compose.yml          Compose entrypoint (docker compose + podman-compose)
 ├── .claude/
-│   └── settings.json          <-- Enforces "auto" permission mode
-├── /personas/                 <-- Static behavioral anchors
-│   ├── 01_Researcher.md       (Theory & Ideation, grounded in arxiv)
-│   ├── 02_RA_Skeptic.md       (Rigorous Critique, cross-checks arxiv)
-│   ├── 03_Python_Engineer.md  (HPC Implementation)
-│   ├── 04_LaTeX_Writer.md     (XeLaTeX Typesetting)
-│   └── 05_Review_Board.md     (Final Evaluation)
-├── /mcp_servers/
-│   └── /arxiv/                <-- arxiv MCP server (search + PDF fetch)
-├── /scripts/
-│   └── register-arxiv-mcp.sh  <-- Register arxiv MCP at user scope
-└── /runs/                     <-- Isolated daily execution workspaces
-    ├── /run_001
-    └── /run_002
+│   └── settings.json           Pins Claude Code to "auto" permission mode
+├── personas/                   Static behavioral anchors — read before each phase
+│   ├── 01_Researcher.md        Theory & ideation, grounded in arxiv literature
+│   ├── 02_RA_Skeptic.md        Rigorous critique, cross-checks arxiv literature
+│   ├── 03_Python_Engineer.md   HPC implementation
+│   ├── 04_LaTeX_Writer.md      XeLaTeX typesetting
+│   └── 05_Review_Board.md      Final evaluation
+├── mcp_servers/
+│   └── arxiv/                  MCP server: search_arxiv, get_paper, download_paper_text
+├── scripts/
+│   └── register-arxiv-mcp.sh   One-shot user-scope MCP registration (host or container)
+└── runs/
+    └── run_NNN/                One isolated workspace per nightly run
+        ├── instruction.md      Seed prompt (you write this)
+        ├── theory_draft.md     Researcher output
+        ├── ra_critique.md      RA Skeptic output
+        ├── src/                Python Engineer workspace
+        ├── report/             LaTeX Writer workspace
+        └── final_review.md     Review Board output
 ```
 
-## ⚙️ Prerequisites
+---
 
-You can run the framework **either** directly on a lab server **or** inside the provided container. The container is the recommended path because it pins every toolchain (TeX Live, compilers, Python, Rust, Node, Claude Code) to a known-good version.
+## Requirements
 
-### Option A — Run on bare metal
-* **Claude Code CLI:** Authenticated and ready.
-* **uv:** For reproducible Python project and dependency management.
-* **XeLaTeX / TeX Live:** Required by the LaTeX Writer.
-* **Standard build tools:** `make`, `cmake`, `gcc` (plus Rust if needed).
+Pick one of:
 
-### Option B — Run in the container (recommended)
-* **Docker** ≥ 24 with Compose v2, **or** **Podman** ≥ 4 with `podman-compose`.
-* Your host `~/.claude` directory, already authenticated with Claude Code (`claude login` on the host once).
+- **Container (recommended)** — Docker ≥ 24 with Compose v2, *or* Podman ≥ 4 with `podman-compose`. Nothing else needs to be installed; the image ships TeX Live, compilers, Python, Rust, Node, Claude Code, and `uv`.
+- **Bare metal** — Linux with Claude Code, `uv`, TeX Live (XeLaTeX + `latexmk`), `gcc`/`g++`/`cmake`, and a recent Rust toolchain already installed.
 
-## 📦 The Container
+Either way, you need a Claude Code account already authenticated on the host (`claude` login flow completed once).
 
-The image is a single `Dockerfile` that works for both Docker and Podman (and their respective composes). It bundles:
+---
 
-* **TeX Live full** + `latexmk` + `biber` (for the LaTeX Writer)
-* **C/C++:** `gcc`, `g++`, `clang`, `gdb`, `cmake`, `build-essential`
-* **Python 3** + `uv`
-* **Rust:** `rustc`, `cargo`, `rustfmt` (native apt packages)
-* **Node.js 20** + the **Claude Code CLI** (`claude`)
-* The **arxiv MCP server** dependencies pre-warmed in the `uv` cache
+## How to Run a Nightly Experiment
 
-### Build the image
+This is the complete walkthrough for a first-time user. Each step has a verification command — run it and check the expected output before moving on. The whole path takes about 20–40 minutes the first time (most of that is the TeX Live layer downloading).
+
+> Assumes you've cloned this repo and your working directory is the repo root.
+
+### Step 1 — Install and verify your container runtime
+
+Install Docker (with Compose v2) or Podman (with `podman-compose`). Then:
 
 ```bash
 # Docker
+docker --version && docker compose version
+# Expected: both commands print version numbers, no errors.
+
+# OR Podman
+podman --version && podman-compose --version
+# Expected: both commands print version numbers, no errors.
+```
+
+If either subcommand is missing, install the missing piece before continuing. The rest of this guide uses `docker compose`; substitute `podman-compose` throughout if you're on Podman.
+
+### Step 2 — Authenticate Claude Code on the host
+
+Even if you plan to run everything from inside the container, you must log in to Claude Code **once on the host**. The container bind-mounts the host's `~/.claude` directory to inherit that authentication.
+
+```bash
+# If Claude Code isn't installed on the host yet:
+npm install -g @anthropic-ai/claude-code
+
+claude    # interactive login flow, complete it in your browser
+```
+
+Verify:
+
+```bash
+ls ~/.claude
+# Expected: at least a .credentials.json file (plus settings.json, projects/, etc.)
+```
+
+If `~/.claude` is empty, the login didn't complete — retry before continuing.
+
+### Step 3 — Build the container image
+
+```bash
 docker compose build
-
-# Podman
-podman-compose build
-# or equivalently:
-# podman build -t research-company:latest .
 ```
 
-> The TeX Live layer is large (multi-GB). The first build will take a while; subsequent builds reuse the cached layer.
+Expected: a successful build ending in something like `naming to docker.io/library/research-company:latest`.
 
-### Start a research session
+The TeX Live layer is several GB; expect this step to take 10–25 minutes on a first build depending on your link speed. Subsequent builds reuse the cached layers.
 
-The container is designed to be invoked interactively, with the repo and your `~/.claude` bind-mounted. Use `run --rm` rather than `up` so you get a clean TTY per session:
+Verify:
 
 ```bash
-# Docker
+docker image ls research-company
+# Expected: a row with REPOSITORY=research-company and TAG=latest.
+```
+
+### Step 4 — Enter the container
+
+```bash
 docker compose run --rm research
-
-# Podman
-podman-compose run --rm research
 ```
 
-Or without compose:
+You should land in an interactive shell at `/workspace`. Verify that the toolchain is present:
 
 ```bash
-# Docker
-docker run --rm -it \
-  -v "$PWD":/workspace \
-  -v "$HOME/.claude":/root/.claude \
-  -w /workspace \
-  research-company:latest
-
-# Podman (rootless: host UID maps to root-in-container, so bind mounts just work)
-podman run --rm -it \
-  -v "$PWD":/workspace \
-  -v "$HOME/.claude":/root/.claude \
-  -w /workspace \
-  research-company:latest
+claude --version            # Claude Code version
+uv --version                # uv version
+xelatex --version | head -1 # XeLaTeX version line
+gcc --version | head -1     # gcc version line
+rustc --version             # rustc version
+python3 --version           # Python 3.x
+ls ~/.claude                # must show .credentials.json (from the host mount)
 ```
 
-> If you also want the host's `~/.claude.json` visible inside the container (e.g. to share host-scope MCP registrations), add `-v "$HOME/.claude.json":/root/.claude.json` **after** running `touch ~/.claude.json` on the host. Without the `touch`, the daemon will create it as a directory and Claude Code will fail to start.
+If `~/.claude` is empty inside the container, your bind mount didn't land — exit, check `docker-compose.yml`, and make sure `$HOME/.claude` exists on the host.
 
-You now have a shell inside `/workspace` with `claude` on the `PATH` and your host auth already mounted.
+**Keep this shell open** for the remaining steps.
 
-### A note on file ownership
+### Step 5 — Register the arxiv MCP server (inside the container)
 
-- **Podman rootless** maps your host UID to `root` inside the container automatically, so files created during the run appear on the host owned by you. Nothing else needed.
-- **Docker** runs as real root by default, so files the container creates will be owned by `root` on the host. Two ways to avoid that:
-  - Run with `-u "$(id -u):$(id -g)" -e HOME=/workspace` (Claude Code auth mount still needs to be at `$HOME/.claude` — you'd also need to pass that through), or
-  - `sudo chown -R "$USER" runs/` after the run.
+The Researcher and RA personas are required to ground their work in recent literature through an MCP server that exposes three tools: `search_arxiv`, `get_paper`, `download_paper_text`. Register it at user scope once per environment — so once inside the container now, and (separately) once on your host if you want it available outside the container too.
 
-## 📚 arxiv MCP server
-
-The Researcher and RA personas are required to ground their work in recent literature. They do this through a small MCP server at `mcp_servers/arxiv/` that exposes three tools:
-
-| Tool | Purpose |
-| --- | --- |
-| `search_arxiv(query, max_results, sort_by)` | Keyword / field search against arxiv |
-| `get_paper(arxiv_id)` | Full metadata + abstract for one paper |
-| `download_paper_text(arxiv_id, max_chars)` | PDF → extracted plain text |
-
-### Register the MCP server (user scope)
-
-Run this **once per environment** where you want the server available — i.e. once on the host for your normal Claude Code usage, and once inside the container for containerized runs:
+From `/workspace` in the container:
 
 ```bash
 ./scripts/register-arxiv-mcp.sh
+# Expected final line: "Registered arxiv MCP server at user scope."
 ```
 
-The script:
-
-1. Registers at **user scope** (`claude mcp add -s user arxiv ...`), so every Claude Code session for your user sees the server.
-2. Wires up the server via `uv run --with mcp[cli] --with arxiv --with pypdf --with httpx`, so the only runtime dependency is `uv` — no virtualenv to manage.
-3. Resolves the absolute path of `arxiv_mcp_server.py` at call time, so the same script produces the right registration on the host (host path) and inside the container (`/workspace/mcp_servers/arxiv/...`).
-
-Confirm it registered:
+Verify:
 
 ```bash
 claude mcp list
-# arxiv: uv run --quiet --with mcp[cli] --with arxiv --with pypdf --with httpx python /.../arxiv_mcp_server.py
+# Expected: a line beginning with "arxiv:" pointing at a uv run ... command
+#           that ends in .../mcp_servers/arxiv/arxiv_mcp_server.py
 ```
 
-> Because `~/.claude.json` is **not** typically mounted by the default container setup (only `~/.claude` is), host and container maintain separate MCP registrations — that is intentional, since the absolute paths differ between environments. If you mount `~/.claude.json` into the container as well (the default `docker-compose.yml` does), re-running `register-arxiv-mcp.sh` inside the container will simply overwrite the host entry with the container-local path. Re-run it on the host afterwards to switch back.
+Smoke-test it by asking Claude a trivial question that forces it to hit the server:
 
-## 🚀 How to Run a Nightly Experiment
+```bash
+claude -p "Use the arxiv MCP server to search for one paper about 'DMRG'. Return just the arxiv id and title."
+# Expected: a single arxiv id and paper title. If Claude says the tool isn't available,
+# re-run register-arxiv-mcp.sh and re-check claude mcp list.
+```
 
-It is recommended to run this under a tmux session or a nohup session for easier progress checking and result harvesting.
+> **If you also want the MCP server available outside the container**, run the same script once from the repo root on the host. Each environment registers its own absolute path; the two don't conflict.
 
-### 1. Create a new run directory
+### Step 6 — Create a run directory and write the instruction
+
+From `/workspace` inside the container (or the repo root on the host):
+
 ```bash
 mkdir -p runs/run_001
 cd runs/run_001
 ```
 
-### 2. Write the instruction file
-Create an `instruction.md` file in this new directory. This is the seed prompt for the entire night. Be as mathematically and physically specific as possible.
+Create `runs/run_001/instruction.md`. This single file is the seed prompt for the entire night, so be mathematically and physically specific. Minimal example:
 
-**Example `instruction.md`:**
-> **Objective:** Propose a method to utilize SU(2) symmetries to optimize tensor network simulations, specifically focusing on reducing memory consumption during a DMRG step for a Heisenberg chain.
->
-> **Deliverables:**
-> 1. Derive the block-sparse tensor contraction mathematically.
-> 2. Implement a Python prototype to benchmark the memory consumption of the SU(2) symmetric approach against a dense U(1) baseline.
-> 3. Summarize the memory scaling results in a formal report.
+```markdown
+# Objective
+Propose a method to exploit SU(2) symmetries to reduce memory consumption
+during a DMRG step on a Heisenberg chain.
 
-### 3. Launch the engine
+# Deliverables
+1. A mathematical derivation of the block-sparse tensor contraction.
+2. A Python prototype benchmarking memory consumption of the SU(2) symmetric
+   approach against a dense U(1) baseline.
+3. A formal report summarizing the memory scaling results.
+```
 
-With `.claude/settings.json` enforcing auto mode, execute Claude Code with a master prompt that triggers the workflow defined in `CLAUDE.md`:
+Verify:
+
+```bash
+cat instruction.md
+# Expected: your objective and deliverables, printed back to you.
+```
+
+### Step 7 — Launch the engine
+
+Still inside `runs/run_001/`:
 
 ```bash
 claude "Read instruction.md and begin Phase 1 of the research cycle. Read your roles from ../../personas/ as needed. Do not stop until Phase 5 yields a final_review.md."
 ```
 
-The same command works identically on the host and inside the container.
+Because `.claude/settings.json` pins the permission mode to `auto`, Claude will execute tools without prompting. The run will proceed through all five phases, writing intermediate files as it goes. Expect it to take from tens of minutes to several hours depending on the complexity of the instruction.
 
-## 🛡️ Failsafes and Security
+For long runs, wrap the command in `tmux` (or `nohup`) so you can disconnect and reattach:
 
-* **Resource Limiting:** The Python Engineer persona is hardcoded to enforce `resource.setrlimit` (RAM capping) and C-library thread limiting (`OMP_NUM_THREADS`, etc.) in all scripts. This prevents runaway tensor contractions from crashing the shared lab server.
-* **Context Anchoring:** Do not delete the files in `/personas/`. Claude relies on physically reading these via `cat` to context-switch cleanly and reset its behavior during long sessions.
-* **Modularity:** The Python Engineer will automatically build its environment in `./src/`, and the LaTeX Writer will generate its files in `./report/`.
+```bash
+tmux new -s run_001
+# inside tmux:
+claude "Read instruction.md and begin Phase 1..."
+# detach with Ctrl-b d; reattach with: tmux attach -t run_001
+```
+
+### Step 8 — Harvest the output
+
+When the engine terminates, your run directory will contain the full trail:
+
+```text
+runs/run_001/
+├── instruction.md        Your seed prompt
+├── theory_draft.md       Researcher's proposal (with a Literature Review section citing arxiv ids)
+├── ra_critique.md        RA's critique (with an independent literature cross-check)
+├── src/                  Python Engineer's uv project + simulation.log
+├── report/
+│   ├── main.tex          LaTeX source
+│   └── main.pdf          Compiled report (if XeLaTeX succeeded)
+└── final_review.md       Review Board's verdict
+```
+
+Verify:
+
+```bash
+ls runs/run_001/
+test -f runs/run_001/final_review.md && echo "cycle complete" || echo "cycle did not finish — inspect the last persona's output"
+```
+
+If `final_review.md` is missing, read the most recently modified file in the run directory to see where the cycle stopped, then re-launch with a follow-up prompt pointing Claude at the next unfinished phase.
+
+---
+
+## Running on bare metal (alternative to the container)
+
+If you'd rather skip the container, the only changes to the walkthrough above are:
+
+- Skip steps 1, 3, 4. Install TeX Live, `uv`, and a C/C++/Rust toolchain yourself.
+- In step 5, run `./scripts/register-arxiv-mcp.sh` directly from the host repo root.
+- In step 6–7, run everything from a normal host shell.
+
+Everything else is identical — the same personas, the same `claude` command, the same outputs.
+
+---
+
+## File ownership: Docker vs Podman
+
+Bind mounts cross the host/container boundary, so UID mapping matters:
+
+- **Podman rootless** maps your host UID to `root` inside the container automatically. Files created during the run appear on the host owned by you. No action required.
+- **Docker** runs as real root by default, so files the container creates will be owned by `root` on the host. Either pass `-u "$(id -u):$(id -g)"` at run time, or run `sudo chown -R "$USER" runs/` after the run.
+
+## Optional: sharing `~/.claude.json` with the container
+
+`~/.claude/` (mounted by default) holds auth, settings, and MCP registrations. `~/.claude.json` is a separate host file that holds some global Claude Code config. If you want to share it with the container too, uncomment the relevant line in `docker-compose.yml` — **but first** run `touch ~/.claude.json` on the host. Otherwise the daemon will create it as a directory and Claude Code will fail to start.
+
+---
+
+## Failsafes and operational notes
+
+- **Resource limiting.** The Python Engineer persona enforces `resource.setrlimit` (RAM capping) and C-library thread limits (`OMP_NUM_THREADS`, etc.) in every script, preventing runaway tensor contractions from crashing shared lab servers.
+- **Context anchoring.** Do not delete or rename files in `personas/`. Claude relies on physically reading them (`cat ../../personas/0X_*.md`) to reset its context cleanly between phases.
+- **Modularity.** The Python Engineer always initializes its workspace under `runs/run_NNN/src/` via `uv init`; the LaTeX Writer always writes to `runs/run_NNN/report/`. Do not move these.
+- **MCP scope.** The arxiv server is registered at **user scope**, not project scope. That means a host registration and a container registration are independent — one does not leak into the other, even though both are pinned to your user.
