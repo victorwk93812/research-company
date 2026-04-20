@@ -1,0 +1,72 @@
+# ==========================================
+# ⚙️ Claude Code Configuration
+# ==========================================
+# Ignore local state/memory dumps, but strictly track the project settings
+.claude/*
+!.claude/settings.json
+
+# ==========================================
+# 📝 Editors & OS
+# ==========================================
+# Keeps your Neovim workspace clean
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# 🐍 Python & `uv` Environments (runs/*/src/)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+.env
+.python-version
+
+# ==========================================
+# 💾 HPC Data & Simulation Logs
+# ==========================================
+# Prevents the Python Engineer from committing massive matrices or logs
+*.log
+*.dat
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.pickle
+*.csv
+# Keep settings.json if tracked above, ignore other dump files
+*.json
+!/.claude/settings.json
+
+# ==========================================
+# 📄 XeLaTeX Build Artifacts (runs/*/report/)
+# ==========================================
+# Standard LaTeX intermediate files
+*.aux
+*.bbl
+*.blg
+*.bcf
+*.xml
+*.fdb_latexmk
+*.fls
+*.out
+*.toc
+*.synctex.gz
+
+# Beamer/Presentation specific (if generated)
+*.nav
+*.snm
+
+# XeLaTeX specific intermediate files
+*.xdv
+
+# ==========================================
+# 📦 Compiled Outputs (Optional)
+# ==========================================
+# Comment the line below if you DO NOT want to track the final compiled 
+# PDFs in git to save repository space.
+*.pdf
