@@ -36,7 +36,11 @@ Before launching a nightly run, ensure your lab server has the following install
 
 ## 🚀 How to Run a Nightly Experiment
 
-Do not run Claude Code directly from the project root, as this will pollute the directory. Follow these steps to initiate a cycle:
+Do not run Claude Code directly from the project root, as this will pollute the directory. 
+
+It is recommended to run this under a tmux session or a nohup session for easier progress checking and result harvesting.  
+
+Follow these steps to initiate a cycle:
 
 ### 1. Create a New Run Directory
 Initialize a new, sequentially numbered directory inside `/runs/`. 
