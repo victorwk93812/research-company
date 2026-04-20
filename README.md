@@ -133,15 +133,15 @@ docker compose run --rm research
 ```bash
 # Docker
 docker run --rm -it \
-  -v "$PWD":/workspace \
-  -v "$HOME/.claude":/root/.claude \
+  -v "$PWD":/workspace:z \
+  -v "$HOME/.claude":/root/.claude:z \
   -w /workspace \
   research-company:latest
 
 # Podman (rootless: host UID maps to root-in-container, so bind mounts just work)
 podman run --rm -it \
-  -v "$PWD":/workspace \
-  -v "$HOME/.claude":/root/.claude \
+  -v "$PWD":/workspace:z \
+  -v "$HOME/.claude":/root/.claude:z \
   -w /workspace \
   research-company:latest
 ```
@@ -150,7 +150,9 @@ The two bind mounts are the important part:
 - `$PWD → /workspace` makes this repository visible inside the container.
 - `$HOME/.claude → /root/.claude` forwards your Claude Code auth (and any settings / MCP registrations) into the container.
 
-> If you also want the host's `~/.claude.json` visible inside the container (e.g. to inherit host-scope MCP registrations), add `-v "$HOME/.claude.json":/root/.claude.json` to the command — **but** run `touch ~/.claude.json` on the host first, or the daemon will create it as a directory and Claude Code will fail to start.
+The `:z` suffix on each mount tells the runtime to relabel the source for SELinux so the container can actually read/write it. On SELinux-enforcing hosts (RHEL, Fedora, Rocky, Alma, CentOS Stream) this is what prevents `ls: Permission denied` errors. On non-SELinux hosts it's a harmless no-op, so leave it on.
+
+> If you also want the host's `~/.claude.json` visible inside the container (e.g. to inherit host-scope MCP registrations), add `-v "$HOME/.claude.json":/root/.claude.json:z` to the command — **but** run `touch ~/.claude.json` on the host first, or the daemon will create it as a directory and Claude Code will fail to start.
 
 You should land in an interactive shell at `/workspace`. Verify that the toolchain is present:
 
@@ -295,6 +297,10 @@ Bind mounts cross the host/container boundary, so UID mapping matters:
 ## Optional: sharing `~/.claude.json` with the container
 
 `~/.claude/` (mounted by default) holds auth, settings, and MCP registrations. `~/.claude.json` is a separate host file that holds some global Claude Code config. If you want to share it with the container too, uncomment the relevant line in `docker-compose.yml` — **but first** run `touch ~/.claude.json` on the host. Otherwise the daemon will create it as a directory and Claude Code will fail to start.
+
+## SELinux note
+
+On SELinux-enforcing distributions (RHEL, Fedora, Rocky, Alma, CentOS Stream) the container is not allowed to touch bind-mounted host files unless the source has a matching label. Both `docker-compose.yml` and the plain `docker run` / `podman run` examples above already pass `:z` on every bind mount, which asks the runtime to apply a shared label. On non-SELinux hosts `:z` is a harmless no-op. If you see `ls: cannot access …: Permission denied` on `/workspace` or `/root/.claude` inside the container, double-check that the `:z` suffix is still on every mount.
 
 ---
 

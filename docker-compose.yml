@@ -18,13 +18,16 @@ services:
     environment:
       TERM: ${TERM:-xterm-256color}
     volumes:
+      # The ":z" suffix tells the container runtime to relabel the bind
+      # source so SELinux lets the container read/write it. It is a no-op
+      # on non-SELinux hosts, so it's safe to leave on everywhere.
       # The repo itself.
-      - .:/workspace
+      - .:/workspace:z
       # Claude Code auth + per-user settings + MCP registrations live here.
-      - ${HOME}/.claude:/root/.claude
+      - ${HOME}/.claude:/root/.claude:z
       # Optional: share the host's global Claude config (including host-scope
       # MCP registrations). If you enable this line, make sure the host file
       # actually exists first (`touch ~/.claude.json`) — otherwise Docker
       # will create it as a directory and break Claude Code.
-      # - ${HOME}/.claude.json:/root/.claude.json
+      # - ${HOME}/.claude.json:/root/.claude.json:z
     command: /bin/bash
