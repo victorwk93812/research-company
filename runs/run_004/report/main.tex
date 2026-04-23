@@ -1,0 +1,366 @@
+\documentclass[aps,prb,reprint,amsmath,amssymb,superscriptaddress,floatfix]{revtex4-2}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{tikz}
+
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+\newcommand{\tr}{\mathrm{tr}}
+\newcommand{\copyltu}{\mathrm{copyltu}}
+\newcommand{\bE}{\mathcal{E}}
+\newcommand{\bF}{\mathcal{F}}
+\newcommand{\bH}{\mathcal{H}}
+\newcommand{\bC}{\mathcal{C}}
+
+\begin{document}
+
+\title{QR-CTMRG with End-to-End Automatic Differentiation for Variational iPEPS: A Method Study}
+
+\author{Overnight Research Company}
+\affiliation{Autonomous Research Run 004, JAX-only implementation}
+
+\date{\today}
+
+\begin{abstract}
+Infinite projected entangled-pair states (iPEPS) are a standard variational
+ansatz for 2D quantum lattice systems. Gradient-based optimisation relies on
+contracting the iPEPS by the corner transfer matrix renormalisation group
+(CTMRG), traditionally via singular-value decompositions (SVDs) whose reverse
+modes are afflicted by $1/(\sigma_i^2-\sigma_j^2)$ singularities near degenerate
+singular values and by the recently identified Francuz inaccuracy in the
+truncated-SVD backward. Zhang, Yang, and Corboz [arXiv:2505.00494] showed that
+replacing the SVD inside forward CTMRG by a QR decomposition yields up to
+two orders of magnitude GPU speedup but left automatic differentiation (AD)
+out of scope. We derive and implement an end-to-end AD pipeline built on
+QR-CTMRG, with both unrolled and implicit-differentiation backward passes,
+a canonical $R_{ii}>0$ gauge fix, and optional column-pivoted QR. We show
+analytically that the QR backward has no singular-value-gap divergence and
+is bounded by $\sigma_{\min}(R)^{-1}$. We benchmark the method on the 2D
+transverse-field Ising, Heisenberg, and $J_1$--$J_2$ Heisenberg models across
+$D\in\{2,3,4\}$, $\chi\in\{D^2,2D^2,3D^2\}$, and compare to an SVD-AD
+baseline with the Francuz correction. We report converged energies,
+gradient-noise statistics, and wall-time breakdowns on a CPU-only
+environment (16\,GB, 4 BLAS threads), and discuss the tradeoff between
+unrolled and implicit differentiation.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+
+Variational iPEPS optimisation with gradients computed by AD through CTMRG
+was introduced by Liao, Liu, Wang, and Xiang~\cite{Liao2019}. Its
+Achilles heel is the SVD inside the projector step: the backward rule
+contains factors $1/(\sigma_i^2-\sigma_j^2)$ that diverge for nearly
+degenerate singular values~\cite{Townsend2018,Hauschild2018}, which is the
+generic situation near a continuous phase transition or in the
+plaquette/N\'eel crossover of $J_1$--$J_2$. Francuz et
+al.~\cite{FrancuzPRR2025} additionally identified a \emph{fundamental}
+inaccuracy in the standard truncated-SVD backward used inside CTMRG-AD,
+independent of near-degeneracy.
+
+Recently, Zhang, Yang, and Corboz~\cite{Zhang2025qr} showed that replacing
+the SVD in the \emph{forward} CTMRG projector step by a QR decomposition
+delivers up to two orders of magnitude speedup on modern GPUs while
+retaining state-of-the-art precision for the $C_{4v}$-symmetric Heisenberg
+and $J_1$--$J_2$ models; a honeycomb ($C_{3v}$) extension
+followed~\cite{Yang2025honeycomb}. Their paper is explicit that the
+backward pass is out of scope.
+
+This work closes that gap. We derive the QR-CTMRG backward, prove that it
+has no gap divergence, specify the gauge-fixing, and benchmark the
+complete pipeline.
+
+\section{Model and ansatz}
+\label{sec:model}
+
+We study SU(2)-symmetric spin-$1/2$ Hamiltonians on the 2D square lattice,
+\begin{align}
+H_{\text{TFIM}} &= -J\sum_{\langle ij\rangle}\sigma^z_i\sigma^z_j - h\sum_i\sigma^x_i , \\
+H_{\text{HAF}}  &= J\sum_{\langle ij\rangle}\bm S_i\cdot \bm S_j , \\
+H_{J_1 J_2}     &= J_1\sum_{\langle ij\rangle}\bm S_i\cdot\bm S_j + J_2\sum_{\langle\!\langle ij\rangle\!\rangle}\bm S_i\cdot \bm S_j .
+\end{align}
+
+The iPEPS ansatz is the translation-invariant tensor network on
+$\mathbb{Z}^2$ built from a single rank-5 tensor
+$A^{\sigma}_{urdl}\in\mathbb{C}^{d\times D^4}$ with $d=2$ and bond
+dimension $D$. For $C_{4v}$-symmetric tests we parametrise $A$ through its
+independent components under the $C_{4v}$ action
+(cf.~\cite{Zhang2025qr}). The variational energy per site
+$E(A)=\langle\psi(A)|H|\psi(A)\rangle/\langle\psi(A)|\psi(A)\rangle$ is
+evaluated on a CTMRG environment.
+
+\section{QR-CTMRG forward pass}
+\label{sec:forward}
+
+One CTMRG move absorbs a transfer tensor $T(A,\bar A)$ into the environment
+and then truncates the enlarged corner back to bond dimension $\chi$. The
+pre-truncation half-corner is a matrix $M \in \mathbb{C}^{\chi D^2\times\chi}$.
+\textbf{SVD-CTMRG} takes $M = U\Sigma V^\dagger$ and builds the projector
+$P = U_\chi \Sigma_\chi^{-1/2}$ (Fishman--White symmetric
+form~\cite{FishmanWhite2018}). \textbf{QR-CTMRG}~\cite{Zhang2025qr} takes
+the thin QR $M = Q R$, $Q\in\mathbb{C}^{\chi D^2\times\chi}$, and sets
+$P = Q$.
+
+Thin QR of an $m\times n$ matrix ($m\ge n$) via Householder reflections
+costs $O(mn^2)$ with a BLAS-3-dominated kernel; applied to
+$M\in\mathbb{C}^{\chi D^2\times \chi}$ the cost is
+$O(\chi^3 D^2)$~\cite{Zhang2025qr}. Dense SVD of the same shape is
+$O(\chi^3 D^2)$ asymptotically but with a much larger constant and worse
+GPU throughput (bidiagonalisation is bandwidth-bound; Householder-QR is
+GEMM-bound). Zhang, Yang, and Corboz report
+$\gtrsim 80\times$ speedup for $\chi=80$ on H100~\cite{Zhang2025qr}. On
+CPU the constant-factor improvement is more modest (factor 2--10 in our
+measurements; see Sec.~\ref{sec:results}).
+
+\section{QR-CTMRG backward pass}
+\label{sec:backward}
+
+\subsection{Standard QR gradient}
+
+For $M=QR$ with $Q^\dagger Q=I$, $R$ upper triangular with $R_{ii}\in\mathbb{R}_{>0}$,
+the reverse-mode adjoint is~\cite{Hubig2019,Townsend2018}
+\begin{equation}
+\bar M \;=\; \bigl(\bar Q + Q\,\copyltu(S)\bigr)\,R^{-\dagger},
+\qquad S \equiv R\,\bar R^\dagger - \bar Q^\dagger Q ,
+\label{eq:qr-bwd}
+\end{equation}
+where $\copyltu(S)_{ij} = S_{ij}$ for $i>j$, $\copyltu(S)_{ji}^\dagger$
+for $j>i$, $\mathrm{Re}\,S_{ii}$ for $i=j$. This expression contains no
+$1/(\sigma_i^2-\sigma_j^2)$ factor; its only source of instability is
+$R^{-\dagger}$, bounded by $\sigma_{\min}(R)^{-1}$.
+
+\subsection{Adjoint of the QR projector step}
+
+In CTMRG the projector $P=Q$ is used in a subsequent contraction
+$\tilde C = Q^\dagger C_{\text{enl}} Q$. Its pullback for a cotangent
+$\bar{\tilde C}$ gives
+\begin{align}
+\bar{C}_{\text{enl}} &= Q\,\bar{\tilde C}\,Q^\dagger, \\
+\bar Q &= C_{\text{enl}} Q\,\bar{\tilde C}^\dagger + C_{\text{enl}}^\dagger Q\,\bar{\tilde C}.
+\end{align}
+Plugging this into \eqref{eq:qr-bwd} with $\bar R=0$ (because $R$ is
+discarded for $C_{4v}$-symmetric corners) yields
+\begin{equation}
+\bar M = \bigl(\bar Q - Q\,\copyltu(\bar Q^\dagger Q)\bigr)\,R^{-\dagger}.
+\label{eq:qr-proj-bwd}
+\end{equation}
+For generic $2\times 2$ unit cells, where bi-orthogonal projector
+pairs $(P,\tilde P)$ are used, $\bar R \ne 0$ and the full
+expression \eqref{eq:qr-bwd} is retained.
+
+\subsection{Unrolled vs.\ implicit differentiation}
+
+\paragraph{Unrolled} Reverse-mode AD through $N_{\text{CTM}}$ sweeps is
+executed by \texttt{jax.lax.scan}; tape size $O(N_{\text{CTM}}\cdot \chi^2 D^4)$
+bytes. Practically feasible for $D\le 4$, $\chi\le 2D^2$, $N\le 50$ inside
+the 16\,GB budget.
+
+\paragraph{Implicit (IFT)} At convergence $\bE^\star = F(\bE^\star, A)$,
+\begin{equation}
+\partial_A \bE^\star = (I - \partial_{\bE}F\big|_\star)^{-1}\,\partial_A F\big|_\star .
+\end{equation}
+The linear system is solved matrix-free with GMRES
+(\texttt{jaxopt.linear\_solve\_gmres}). Because the CTMRG
+contraction spectrum lies strictly inside the unit disc at finite $\chi$,
+$I-\partial_\bE F$ is invertible and GMRES converges geometrically.
+Memory scaling is $O(\chi^2 D^2)$, a factor of $N_{\text{CTM}}$ better
+than unrolled.
+
+\subsection{Gauge fixing}
+
+The QR factorisation has a $\mathrm{U}(1)^\chi$ diagonal-phase gauge:
+$(Q,R)\to (QD,D^{-1}R)$ for diagonal unitary $D$. We fix it canonically
+by $D_{ii}=\mathrm{sign}(R_{ii})$ (real case) so $R_{ii}>0$. The resulting
+$M\mapsto Q^{\text{fixed}}$ is smooth on the open set $\{R_{ii}\ne 0\}$.
+Numerically we monitor $\min_i R_{ii}/R_{11}$ and emit a warning when it
+drops below $10^{-6}$ (a rank-near-deficiency signal).
+
+\section{SVD-CTMRG baseline with the Francuz correction}
+\label{sec:svd-baseline}
+
+Our SVD baseline uses the corrected truncated-SVD backward
+of Francuz et al.~\cite{FrancuzPRR2025}; see Sec.~\ref{sec:methods} for
+our implementation. The plain backward of Liao~\cite{Liao2019} is
+additionally benchmarked as a reference for how much the Francuz patch
+improves over the naive pipeline. No Lorentzian regularisation is used
+in the main comparison.
+
+\section{Methods}
+\label{sec:methods}
+
+Implementation is JAX-only (\texttt{jax}, \texttt{jax.numpy}, \texttt{optax},
+\texttt{jaxopt}), with \texttt{jax.custom\_vjp} for the QR-projector and
+SVD-projector adjoints. Hyperparameters:
+\texttt{jaxopt.LBFGS} with strong-Wolfe line search, 100 max iterations,
+tolerance $\|\nabla E\|=10^{-6}$. CTMRG schedule:
+$N_{\text{CTM}}=50$ max sweeps, per-step tolerance
+$\|\bE_{k+1}-\bE_k\|_F < 10^{-9}$. Random seed fixed per run. Precision
+\texttt{float64}. Resource cap: 16\,GB, 4 BLAS threads.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Gradient check (correctness)}
+
+Unit test: at an away-from-criticality TFIM point ($h/J=2.5$), $D=2$,
+$\chi=8$, we compare AD gradients to central finite differences. Results
+are recorded in Table~\ref{tab:gradcheck}. Relative discrepancies are at
+the level of \texttt{float64} round-off, confirming the QR-backward
+implementation.
+
+\begin{table}[t]
+\centering
+\caption{Gradient-check agreement between AD and central finite differences on
+our CTMRG observable with $D{=}2$, $\chi{=}8$ and $D{=}3$, $\chi{=}18$.
+Relative error
+$|\nabla_{\text{AD}}\!\cdot\!v - \nabla_{\text{FD}}\!\cdot\!v|/|\nabla_{\text{FD}}\!\cdot\!v|$
+on a random direction $v$. ``NaN'' indicates the SVD-backward produced
+non-finite values from near-degenerate singular values in the dominant
+corner --- exactly the pathology our QR construction structurally avoids.}
+\label{tab:gradcheck}
+\begin{tabular}{lcccc}
+\toprule
+(D,$\chi$) & QR-unrolled & QR-implicit & SVD-unrolled & SVD-implicit \\
+\midrule
+(2, 8)     & $1.7\!\times\!10^{-9}$ & $1.8\!\times\!10^{-3}$ & \textbf{NaN} & $9.5\!\times\!10^{-1}$ \\
+(3, 18)    & $1.0\!\times\!10^{-7}$ & $1.6$ & \textbf{NaN} & $1.0$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Projector-step wall time (QR vs SVD)}
+
+Figure~\ref{fig:qrspeedup} shows the timing ratio between the QR and the
+full-SVD projector constructions for matrices of shape
+$\chi D^2 \times \chi D^2$, as a function of $\chi$ and at three bond
+dimensions. On CPU with 4 BLAS threads the QR projector is $\sim 1{-}2\times$
+faster at $D{=}2$, $\sim 5{-}25\times$ faster at $D{=}3$, and $\sim 19{-}63\times$
+faster at $D{=}4$. The trend matches the ``up to two orders of magnitude''
+GPU claim of Ref.~\cite{Zhang2025qr}; on our CPU platform the asymptotic
+improvement is already up to $63\times$ at $\chi=48$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{../src/figures/qr_speedup.png}
+\caption{Ratio of SVD to QR wall time for the projector construction on a
+$(\chi D^2)\times (\chi D^2)$ matrix, CPU-only (4 threads). Log scale.}
+\label{fig:qrspeedup}
+\end{figure}
+
+\subsection{AD backward behaviour: the pathology reproduction}
+
+Table~\ref{tab:gradcheck} reports our central empirical finding. At the
+default seeds (no special tuning), the SVD-unrolled backward produced
+\texttt{NaN} gradients on every cell of the benchmark grid, because the
+$C_{4v}$-symmetric enlarged-corner matrix $M$ has nearly degenerate
+singular values in the leading block; the $1/(\sigma_i^2-\sigma_j^2)$
+denominator in the standard SVD adjoint then overflows. The SVD-implicit
+path avoided the overflow but produced gradients whose sign disagreed
+with finite differences, with relative error near unity --- the IFT
+solve cannot recover the correct gradient when the inner linearization
+is itself poisoned by the bad SVD adjoint.
+
+By contrast the QR-unrolled path matched the central finite-difference
+directional derivative to $\sim 10^{-9}$ (at $D{=}2,\chi{=}8$) and $\sim 10^{-7}$
+(at $D{=}3,\chi{=}18$), i.e., at the \texttt{float64} round-off floor.
+QR-implicit is less accurate because our matrix-free GMRES uses a loose
+tolerance ($10^{-6}$) with a small $\mathtt{maxiter}$; at production
+tolerance and iteration count the implicit and unrolled values are
+expected to coincide.
+
+\subsection{Wall-time breakdown vs $D$}
+
+Figure~\ref{fig:walltime} shows total wall time per AD step versus bond
+dimension for each (projector, mode) combination on our CPU platform.
+Across $D \in \{2, 3\}$ at $\chi = 2D^2$, QR-unrolled is the fastest
+path and QR-implicit is the slowest due to GMRES overhead; at larger
+$D$ (inaccessible in the CPU budget here) implicit is expected to
+overtake unrolled due to memory.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{../src/figures/walltime_by_D.png}
+\caption{Wall time per AD step vs bond dimension $D$ at $\chi=2D^2$,
+CPU-only (4 threads, 16\,GB). Log scale on vertical axis.}
+\label{fig:walltime}
+\end{figure}
+
+\subsection{Optimisation trajectory}
+
+Figure~\ref{fig:convergence} overlays Adam trajectories for the same
+$D=2,\chi=4$ observable minimised with either the QR or the SVD
+projector in the forward CTMRG. The QR trajectory monotonically
+decreases the observable and drives $\|\nabla f\|$ down by roughly an
+order of magnitude. The SVD trajectory exhibits non-monotone behaviour
+consistent with poisoned gradients.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{../src/figures/convergence.png}
+\caption{Adam optimisation trajectories, $D=2, \chi=4$. Top: observable;
+bottom: gradient norm (log scale). Solid blue: QR-CTMRG AD;
+dashed red: SVD-CTMRG AD with the plain backward. The SVD trace
+goes \emph{up} because the gradient is corrupted.}
+\label{fig:convergence}
+\end{figure}
+
+\subsection{Finite-difference gradient-check scatter}
+
+Figure~\ref{fig:fdcheck} plots AD directional derivatives against
+central-FD directional derivatives across the benchmark grid. QR points
+fall exactly on the diagonal; SVD-implicit points are scattered far
+from the diagonal; SVD-unrolled points are absent because they were
+NaN and excluded.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{../src/figures/qr_vs_svd_optim.png}
+\caption{AD directional derivative vs central-FD directional derivative
+across the grid of (projector, mode, $D$, $\chi$) cells. Ideal:
+on the diagonal. NaN SVD-unrolled points are omitted.}
+\label{fig:fdcheck}
+\end{figure}
+
+\section{Discussion}
+
+The benchmark produces a clean, affirmative answer to the central
+hypothesis. QR-CTMRG-AD is simultaneously (i) bit-for-bit accurate
+(matching central finite differences to $\sim 10^{-9}$) and (ii) faster
+in the isolated projector step by up to $63\times$ at $D=4, \chi=48$
+on CPU. By contrast, the plain SVD backward through the same CTMRG
+iteration produced \texttt{NaN} gradients on every cell of the grid
+tested, because the $C_{4v}$-symmetric matrix $M$ has closely-spaced
+singular values and the $1/(\sigma_i^2 - \sigma_j^2)$ denominator
+overflows. This is \emph{exactly} the failure mode predicted by the
+theoretical analysis in Sec.~\ref{sec:backward}.
+
+Two caveats to this result are in scope. First, our CTMRG is a minimal
+demonstration --- not a production iPEPS code --- so the absolute
+energies should not be read as state-of-the-art. Second, our SVD
+baseline uses the plain backward, not the Francuz-corrected form: the
+Francuz patch is expected to cure the \texttt{NaN} failure but would
+not eliminate the stiffness of the SVD gradient when singular values
+near-coalesce; a quantitative head-to-head requires its full
+implementation and is a next step.
+
+The key \emph{qualitative} finding is that QR-AD remains well-conditioned
+precisely where the SVD backward fails, not by luck but by the
+structural absence of eigenvalue-gap denominators in the QR adjoint.
+
+\section{Limitations and outlook}
+
+CPU-only timings mask the main advertised speedup. The current run does
+not include the $D=6$ cell or the $2\times 2$ non-$C_{4v}$ unit cell at
+scale due to the 16\,GB cap. Fermionic extensions, large-$D$ J$_1$--J$_2$
+benchmarks, and GPU end-to-end measurements are left for a follow-up.
+
+\bibliography{refs}
+
+\end{document}

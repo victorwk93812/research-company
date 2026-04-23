@@ -1,0 +1,15 @@
+[project]
+name = "qrctmrg"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jax>=0.4.30",
+    "jaxopt>=0.8.5",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.4",
+    "optax>=0.2.8",
+    "pyyaml>=6.0.3",
+    "scipy>=1.17.1",
+]

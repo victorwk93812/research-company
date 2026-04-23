@@ -1,0 +1,5 @@
+Hello we're planning to participate a contest with rules given in 2026_challenge_markdown/2026_challenge.md. Our first proposition is to apply entanglement swapping to solve this problem. A rough idea of us is to
+1. Apply gates (such as Hadamard + CNOT) and let (e0, 1), (2, 3), (4, e1) get entangled with each other.
+2. Apply more gates to let (1, 2), (3, 4) be entangled with each other.
+3. Measure 1, 2, 3, and 4 and apply corresponding single qubit gates to e0 and e1, so that they're entangled in a Bell state.
+Do your analysis with python under the analysis/ directory and control your environment with uv.

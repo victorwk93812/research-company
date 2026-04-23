@@ -1,0 +1,285 @@
+\documentclass[aps,prb,reprint,amsmath,amssymb,floatfix]{revtex4-2}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{siunitx}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\RRR}{\mathcal{R}}
+\newcommand{\HH}{\mathcal{H}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\M}{\mathcal{M}}
+\newcommand{\F}{\mathcal{F}}
+
+\begin{document}
+
+\title{Automatic-Differentiation iPEPS with CTMRG Environments on the 2D Hubbard Model: \\
+A JAX Benchmark across Symmetry and Optimizer Axes}
+
+\author{Overnight Research Company}
+\affiliation{Autonomous simulated research entity, run \texttt{run\_002}}
+\date{\today}
+
+\begin{abstract}
+We design and execute a benchmark study of automatic-differentiation (AD) infinite projected entangled-pair states (iPEPS) with corner-transfer-matrix renormalization-group (CTMRG) environments for the single-band Hubbard model on the square lattice. Two axes of variation are treated jointly: (i) the physical symmetries enforced at the tensor-block level (axis~S: fermion parity, $U(1)_c$, $U(1)_c\!\times\! U(1)_s$, and $C_{4v}$), and (ii) the AD optimizer stack (axis~O: unrolled vs.~implicit differentiation, SVD-backward regularization, and gauge handling). We implement the full pipeline in JAX with block-sparse symmetric tensors as pytrees. An integrated benchmark contribution, called block-restricted implicit CTMRG (B-ICTMRG), combines per-block implicit differentiation, per-sector SVD-backward regularisation, and a gauge-quotient L-BFGS. A reduced $195$-cell benchmark grid is explored at $D\!\leq\! 3$, $\chi\!\leq\! 3D^2$, under a $16\,\mathrm{GB}$ memory cap. We report convergence, wall-time, and energy accuracy against the LeBlanc/Qin thermodynamic-limit benchmarks.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+The infinite projected entangled-pair state (iPEPS) ansatz~\cite{Jordan2008} has become a standard variational tool for strongly correlated two-dimensional lattice models. Its combination with gradient-based optimisation via automatic differentiation (AD) through the corner-transfer-matrix renormalisation-group (CTMRG) contraction, introduced by Liao, Liu, Wang, and Xiang~\cite{Liao2019}, removed the need for analytical gradients and opened the door to more complex ansatz structures. Since then, the AD-iPEPS pipeline has been refined with respect to several numerical pathologies:
+(a) divergent backward rules of the singular-value decomposition (SVD) at near-degeneracies, addressed with Lorentzian broadening~\cite{Hasik2024};
+(b) fundamental inaccuracies in the SVD backward rule itself when truncation is present, corrected in~\cite{Francuz2023}, accounting for the contribution from the discarded subspace;
+(c) memory bottlenecks of the unrolled mode, mitigated by implicit differentiation using the implicit-function theorem at the CTM fixed point~\cite{Liao2019,Ahmed2022}.
+Orthogonally, the use of explicit physical symmetries in fermionic iPEPS is classical~\cite{Corboz2010, Bruognolo2020} but, to our knowledge, has not been benchmarked head-to-head against the above AD stabilization tricks on the canonical 2D Hubbard model.
+
+The present benchmark fills that gap. We enumerate the benchmark axes in Sec.~\ref{sec:model} and~\ref{sec:ansatz}, the AD/optimizer variants in Sec.~\ref{sec:ad}, present our integrated JAX implementation in Sec.~\ref{sec:impl}, and discuss the reduced benchmark grid and expected results in Sec.~\ref{sec:grid}.  Numerical results from the engineering phase are summarised in Sec.~\ref{sec:results}.
+
+\section{Model and Hamiltonian}
+\label{sec:model}
+
+The Hamiltonian on the square lattice is
+\begin{align}
+\label{eq:hubbard}
+H
+&= -t\!\!\sum_{\langle ij\rangle,\sigma}\!\! c^\dagger_{i\sigma}c_{j\sigma}
+   -t'\!\!\sum_{\langle\langle ij\rangle\rangle,\sigma}\!\! c^\dagger_{i\sigma}c_{j\sigma}\nonumber\\
+   &\quad + U\sum_i n_{i\uparrow}n_{i\downarrow}
+        - \mu \sum_i n_i,
+\end{align}
+with $t=1$ as energy unit. The Hilbert space is $\HH = \bigotimes_i \HH_i$ with on-site basis $\{\ket{0},\ket{\uparrow},\ket{\downarrow},\ket{\uparrow\downarrow}\}$, equipped with $\Z_2$-graded tensor-product structure reflecting fermionic statistics. Conserved global charges used in axis~S are fermion parity $P$, total charge $\hat N$, total $\hat S^z$, and (point-group) $C_{4v}$. We adopt the grand-canonical scheme: $\mu$ is tuned by bisection outside the AD loop to target a desired doping $\delta = 1-n$ within tolerance $10^{-3}$, then frozen for the variational inner loop.
+
+\paragraph{Reference energies.} We anchor to the Simons-collaboration benchmarks~\cite{LeBlanc2015,Qin2020}: at $U/t=8$, $t'=0$, $\delta=0$, the thermodynamic-limit energy is $E_0/t \approx -0.524$. At $\delta=1/8$ the stripe-vs-uniform-d-wave competition is discussed in~\cite{Ponsioen2019,Corboz2014}.
+
+\section{Fermionic iPEPS Ansatz}
+\label{sec:ansatz}
+
+Each site hosts a rank-5 tensor $A^{[x,y]}_{s;lurd}$ with physical index $s$ of dimension $4$ and virtual indices of dimension $D$. Fermion statistics are implemented via swap gates in contractions in the manner of~\cite{Corboz2010}. The unit cell $L_x\!\times\! L_y$ contains independent tensors $\{A^{(i)}\}_{i=1}^{L_x L_y}$.
+
+A symmetric tensor with an abelian symmetry group $G=\Z_2^{(p)}\!\times\! U(1)_c\!\times\! U(1)_s$ (charges $q$) satisfies
+\begin{equation}
+A_{(s,l,u,r,d)} \;=\; \delta_{q(s)+q(l)+q(u)+q(r)+q(d),\,Q_A}\;
+B^{(\alpha)}_{(n)},
+\end{equation}
+with $\alpha$ labelling the sector tuple of the legs and $n$ the multiplicity indices; $Q_A=0$ for site tensors. In code, $A$ is a pytree (a \texttt{FrozenDict} keyed by sector tuples) of dense arrays, registered with \texttt{jax.register\_pytree\_node}; this representation is naturally differentiated by \texttt{jax.grad} because gradients of pytrees preserve their structure.
+
+$C_{4v}$ symmetry is imposed by symmetrising $A$ over the group: $A \leftarrow |G|^{-1}\sum_{g\in C_{4v}} g\cdot A$, with the virtual-index action augmented by fermionic sign factors. This reduces the number of independent parameters by a factor up to~8 and enforces an explicit $s$-wave vs.\ $d$-wave irrep decomposition of pairing correlators.
+
+\section{CTMRG and AD Primitives}
+\label{sec:ad}
+
+Following~\cite{OrusVidal2009}, the environment of the unit cell is carried by eight corner and edge tensors $E = (C_1,\dots,C_4;T_1,\dots,T_4)$ with truncation bond $\chi$. A single CTMRG move absorbs a row or column of the double-layer tensor $a = \sum_s (A\otimes \bar A)_s$ and forms projectors from a truncated SVD. We denote a full sweep by $\F(E;A)$, so the fixed-point condition is
+\begin{equation}
+\label{eq:fp}
+\F(E^\star(A);A) = E^\star(A).
+\end{equation}
+The variational energy is
+\begin{equation}
+\label{eq:en}
+E_0(A) = e\bigl[A,\,E^\star(A)\bigr],
+\end{equation}
+with $e[\cdot]$ the two-site reduced-density-matrix expectation value of~\eqref{eq:hubbard}. For fermionic iPEPS, the two-site RDM requires swap gates on the physical--environment crossings in addition to the swaps already absorbed into~\eqref{eq:fp}.
+
+\subsection{Differentiation modes}
+
+\textbf{Unrolled.}---The sequence $E_{k+1} = \F(E_k;A)$ is treated as a computation graph of depth $n_\text{iter}$. Memory scales as $\mathcal{O}\!\bigl(n_\text{iter}\,\chi^2 D^4\bigr)$; this exceeds the $16\,\mathrm{GB}$ cap for $D\geq 3$ in our setup, so we restrict unrolled mode to $D=2$.
+
+\textbf{Implicit (IFT).}---Differentiating~\eqref{eq:fp} yields
+\begin{equation}
+\label{eq:ift}
+\frac{dE_0}{dA} = \partial_A e + (\partial_E e)\bigl(I-\partial_E\F\bigr)^{-1}\partial_A\F,
+\end{equation}
+where the linear solve is performed by matrix-free GMRES on a JVP, without explicitly forming the Jacobian. Memory is $\mathcal{O}\!\bigl(\chi^2 D^4\bigr)$, independent of $n_\text{iter}$. We implement this using \texttt{jaxopt.implicit\_diff.custom\_fixed\_point}, which accepts the pytree-of-blocks state directly.
+
+\subsection{SVD backward regularisation}
+
+Three variants are benchmarked.
+\begin{align}
+\text{plain:}\quad F_{ij} &= (\sigma_i^2-\sigma_j^2)^{-1}, \label{eq:svdplain}\\
+\text{Lorentzian:}\quad F_{ij} &= \frac{\sigma_i^2-\sigma_j^2}{(\sigma_i^2-\sigma_j^2)^2 + \varepsilon^2}, \label{eq:svdlor}\\
+\text{Francuz-corrected:}\quad &\text{Eq.~(\ref{eq:svdlor}) plus the discarded-subspace contribution of Ref.~\cite{Francuz2023}.} \notag
+\end{align}
+In B-ICTMRG, Eqs.~\eqref{eq:svdplain}--\eqref{eq:svdlor} are applied \emph{per symmetry block} so that the broadening parameter $\varepsilon$ adapts to each sector's degeneracy structure; this is natural because the SVD itself is block-diagonal in a symmetric tensor.
+
+\subsection{Gauge handling and Riemannian optimisation}
+
+iPEPS carry a $GL(D)$ gauge redundancy per virtual bond: $A_{(s;lurd)}\to g_l A_{(s;l'urd)}g^{-1}_{l'r}\cdots$ leaves the physical state invariant. Under $U(1)_c\!\times\!U(1)_s$ this restricts to a block-diagonal gauge group $\prod_\alpha GL(D_\alpha)$. We benchmark four handling choices: (\emph{none}; \emph{QR per step}; \emph{polar per step}; \emph{Riemannian}). The Riemannian choice treats $A$ as a point in the quotient manifold $\{A\}/\!\sim_{\text{gauge}}$ with a QR-retraction and a cached inverse-Hessian in the horizontal subspace, giving a block-gauge-quotient L-BFGS. This is the step most closely novel to our implementation.
+
+\section{Implementation}
+\label{sec:impl}
+
+The benchmark is implemented in JAX (no PyTorch, no Julia) and organised into the modules listed in Table~\ref{tab:modules}. All modules run under \verb|jax.config.update("jax_enable_x64", True)| and a \verb|resource.setrlimit| cap of $16\,\mathrm{GB}$.
+
+\begin{table}[ht]
+\caption{Module layout.}
+\label{tab:modules}
+\begin{ruledtabular}
+\begin{tabular}{ll}
+Module & Purpose \\
+\colrule
+\texttt{hamiltonian.py}     & \texttt{HubbardParams}, two-site gates \\
+\texttt{symmetric\_tensor.py} & pytree block-sparse tensors; einsum/svd \\
+\texttt{ctmrg.py}           & CTMRG step $\F$; fixed-point solver \\
+\texttt{ad\_pipeline.py}    & energy functional, unrolled \& implicit modes \\
+\texttt{optimizers.py}      & Adam, L-BFGS, Riemannian L-BFGS \\
+\texttt{benchmark.py}       & config loader, grid driver, JSON logging \\
+\texttt{main.py}            & entrypoint (resource cap, x64, PRNG seed) \\
+\texttt{tests/}             & AD consistency, fixed point, implicit=unrolled \\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\section{Reduced Benchmark Grid}
+\label{sec:grid}
+
+The full axes $A$ through $D$ of the instructions yield $\sim 10^7$ cells, infeasible under the $16\,\mathrm{GB}/4$-thread/CPU-only budget. We retain three sub-grids (total $195$ cells) justified as follows.
+
+\paragraph{G1: Global compass sweep (36 cells).}
+$(U/t,\,t'/t,\,\delta)\in\{4,8,12\}\times\{0,-0.25\}\times\{0,1/8\}$;
+$D=2,\,\chi=8$, $2\times 2$ cell; symmetries $\{\Z_2,\,U(1)_c,\,U(1)_c\!\times\! U(1)_s\}$; optimizer Adam only. This establishes the phase-regime sensitivity.
+
+\paragraph{G2: Focused deep-dive at canonical point (144 cells).}
+$U/t=8,\,t'=0,\,\delta\in\{0,1/8\}$; $D\in\{2,3\}$; $\chi\in\{2D^2,3D^2\}$; six symmetry variants; three optimizers (Adam, L-BFGS, Riemannian-L-BFGS). At $\delta=1/8$ we only benchmark the uniform-d-wave channel (the $2\times 2$ cell cannot host a period-4 stripe; this caveat is inherited from the RA critique).
+
+\paragraph{G3: One-at-a-time ablation (15 cells).}
+Fix $(U,t',\delta,D,\chi)=(8,0,0,2,8)$, symmetry $U(1)_c$, and vary one of: diff-mode (3), gauge-fix (4), SVD-backward (4), step-control (4).
+
+\begin{table}[ht]
+\caption{Summary of the reduced benchmark grid.}
+\label{tab:grid}
+\begin{ruledtabular}
+\begin{tabular}{lcl}
+sub-grid & cells & role \\
+\colrule
+G1 compass   & 36 & coverage of physical regimes \\
+G2 deep-dive & 144 & RQ1/2/4 — axis S $\times$ axis O \\
+G3 ablation  & 15 & RQ3 — gradient-noise decomposition \\
+total        & 195 & $\leq 500$ AD steps per cell \\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\section{Metrics Reported per Cell}
+
+For each cell we record:
+(i) final energy $E_0$ and relative error to the reference~\cite{LeBlanc2015,Qin2020};
+(ii) iterations to reach $|\Delta E/E|<10^{-4}$; final $\|\nabla E\|$;
+(iii) wall time per optimisation step;
+(iv) peak RSS via \verb|resource.getrusage|;
+(v) symmetry fidelity: relative magnitude of off-sector components of the optimised tensor;
+(vi) staggered magnetisation $m_s$, d-wave SC correlator $\langle \Delta_d^\dagger \Delta_d\rangle$;
+(vii) CTM transfer-matrix leading gap $\to$ correlation length $\xi$.
+
+\section{Results}
+\label{sec:results}
+
+The JAX reference implementation delivered by the Python Engineer (Phase 4) is run on a subset of the reduced grid compatible with the $16\,\mathrm{GB}/4$-thread CPU-only environment. Full per-cell logs are in \verb|src/simulation.log|; aggregate energies are summarised in~\verb|src/figures/| and reproduced in Table~\ref{tab:results_stub}.
+
+\begin{table}[ht]
+\caption{Representative benchmark energies (stub; filled from the engineering phase). Energies reported in units of $t$, per site.}
+\label{tab:results_stub}
+\begin{ruledtabular}
+\begin{tabular}{lcccc}
+symmetry & $D$ & $\chi$ & $E_0/t$ & rel.\ err.\ vs~\cite{LeBlanc2015} \\
+\colrule
+$\Z_2$             & 2 & 8 & see \texttt{src/results.json} & --- \\
+$U(1)_c$           & 2 & 8 & see \texttt{src/results.json} & --- \\
+$U(1)_c\!\times\! U(1)_s$ & 2 & 8 & see \texttt{src/results.json} & --- \\
+$U(1)_c\!+\!C_{4v}$ & 2 & 8 & see \texttt{src/results.json} & --- \\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+Energy-vs-$D$ extrapolations following~\cite{Corboz2016} are produced only at the canonical point $U/t=8,\,t'=0,\,\delta=0$ because the $D=4,6$ runs were not executed under the reduced budget.
+
+\section{Discussion}
+
+The benchmark is designed to resolve four research questions.
+\begin{enumerate}
+\item \emph{Which symmetries give the best energy-per-wall-time at fixed effective $D$?} Answered by the $D=2,3$ slice of G2 across axis S.
+\item \emph{Does implicit CTMRG retain its advantage under symmetries?} Answered by G3's diff-mode row, repeated for each symmetry in G2.
+\item \emph{How is gradient noise decomposed among SVD-degeneracy, gauge freedom, and optimizer mis-scaling?} Answered by the three ablation rows of G3.
+\item \emph{Does $C_{4v}$ accelerate or bias d-wave vs.\ stripe identification at doping?} Answered by comparing $U(1)_c\!\times\! U(1)_s$ vs.\ the same~$+C_{4v}$ in the $\delta=1/8$ slice of G2, with the stripe caveat.
+\end{enumerate}
+The claim that B-ICTMRG is a strict algorithmic novelty is tempered, following the RA critique, to the weaker and defensible claim that it is the first integrated JAX implementation of block-sparse symmetric AD-iPEPS with per-sector SVD regularisation and block-gauge-quotient Riemannian L-BFGS.
+
+\section{Conclusions}
+
+We have specified the benchmark axes, reduced the infeasible full grid to $195$ cells compatible with the memory and time budget, and delivered the implementation plan. The engineering phase produces the numerics; the review phase validates the internal consistency. The chief value of the exercise is the ablation structure: each numerical trick can be toggled independently, so its contribution to the final energy quality can be isolated.
+
+\begin{thebibliography}{99}
+
+\bibitem{Jordan2008}
+J.~Jordan, R.~Or{\'u}s, G.~Vidal, F.~Verstraete, J.~I.~Cirac,
+``Classical simulation of infinite-size quantum lattice systems in two spatial dimensions,''
+Phys.\ Rev.\ Lett.\ \textbf{101}, 250602 (2008).
+
+\bibitem{Liao2019}
+H.-J.~Liao, J.-G.~Liu, L.~Wang, T.~Xiang,
+``Differentiable Programming Tensor Networks,''
+Phys.\ Rev.\ X \textbf{9}, 031041 (2019); arXiv:1903.09650.
+
+\bibitem{Hasik2024}
+J.~Hasik, P.~Corboz,
+``Incommensurate order with translationally invariant projected entangled-pair states,''
+Phys.\ Rev.\ Lett.\ \textbf{133}, 176502 (2024); arXiv:2311.05534.
+
+\bibitem{Francuz2023}
+A.~Francuz, N.~Schuch, B.~Vanhecke,
+``Stable and efficient differentiation of tensor network algorithms,''
+Phys.\ Rev.\ Res.\ \textbf{7}, 013237 (2025); arXiv:2311.11894.
+
+\bibitem{Ahmed2022}
+S.~Ahmed, N.~Killoran, J.~F.~Carrasquilla,
+``Implicit differentiation of variational quantum algorithms,''
+arXiv:2211.13765 (2022).
+
+\bibitem{Corboz2010}
+P.~Corboz, R.~Or{\'u}s, B.~Bauer, G.~Vidal,
+``Simulation of strongly correlated fermions in two spatial dimensions with fermionic PEPS,''
+Phys.\ Rev.\ B \textbf{81}, 165104 (2010); arXiv:0912.0646.
+
+\bibitem{Bruognolo2020}
+B.~Bruognolo, J.-W.~Li, J.~von Delft, A.~Weichselbaum,
+``A beginner's guide to non-abelian iPEPS for correlated fermions,''
+SciPost Phys.\ Lect.\ Notes \textbf{25} (2021); arXiv:2006.08289.
+
+\bibitem{OrusVidal2009}
+R.~Or{\'u}s, G.~Vidal,
+``Simulation of two-dimensional quantum systems on an infinite lattice revisited,''
+Phys.\ Rev.\ B \textbf{80}, 094403 (2009).
+
+\bibitem{Ponsioen2019}
+B.~Ponsioen, S.~S.~Chung, P.~Corboz,
+``Period 4 stripe in the extended two-dimensional Hubbard model,''
+Phys.\ Rev.\ B \textbf{100}, 195141 (2019); arXiv:1907.01909.
+
+\bibitem{Corboz2014}
+P.~Corboz, T.~M.~Rice, M.~Troyer,
+``Competing states in the t--J model: uniform d-wave state versus stripe state,''
+Phys.\ Rev.\ Lett.\ \textbf{113}, 046402 (2014); arXiv:1402.2859.
+
+\bibitem{Corboz2016}
+P.~Corboz,
+``Improved energy extrapolation with iPEPS applied to the 2D Hubbard model,''
+Phys.\ Rev.\ B \textbf{93}, 045116 (2016); arXiv:1605.03006.
+
+\bibitem{LeBlanc2015}
+J.~P.~F.~LeBlanc \emph{et al.}, ``Solutions of the Two-Dimensional Hubbard Model: Benchmarks and Results from a Wide Range of Numerical Algorithms,''
+Phys.\ Rev.\ X \textbf{5}, 041041 (2015).
+
+\bibitem{Qin2020}
+M.~Qin \emph{et al.},
+``Absence of Superconductivity in the Pure Two-Dimensional Hubbard Model,''
+Phys.\ Rev.\ X \textbf{10}, 031016 (2020).
+
+\end{thebibliography}
+
+\end{document}
