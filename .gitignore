@@ -67,6 +67,6 @@ env/
 # ==========================================
 # 📦 Compiled Outputs (Optional)
 # ==========================================
-# Comment the line below if you DO NOT want to track the final compiled 
+# Uncomment the line below if you DO NOT want to track the final compiled 
 # PDFs in git to save repository space.
-*.pdf
+# *.pdf
