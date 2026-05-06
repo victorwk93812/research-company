@@ -11,6 +11,7 @@ from qiskit import QuantumCircuit, transpile
 import cat_chain
 import cluster_ladder
 import entanglement_swap
+import mocu
 import swap_chain
 from validate_connectivity import validate_connectivity
 
@@ -27,6 +28,7 @@ PROTOCOLS: List[Protocol] = [
     Protocol("swap_chain", swap_chain.build_circuit, "tab:orange"),
     Protocol("cat_chain", cat_chain.build_circuit, "tab:green"),
     Protocol("cluster_ladder", cluster_ladder.build_circuit, "tab:red"),
+    Protocol("mocu", mocu.build_circuit, "tab:purple"),
 ]
 
 
@@ -123,7 +125,10 @@ def noise_benchmark(L_range: List[int], p_2q: float = 1e-2, shots: int = 4096) -
     from qiskit.quantum_info import DensityMatrix, Pauli
     import numpy as np
 
-    results: Dict[str, Dict[int, float]] = {p.name: {} for p in PROTOCOLS[:3]}
+    # All protocols except cluster_ladder (whose stretch-goal correction map
+    # is incomplete; see final_review_v1.md). MOCU (added in v2) is included.
+    NOISE_PROTOCOLS = [p for p in PROTOCOLS if p.name != "cluster_ladder"]
+    results: Dict[str, Dict[int, float]] = {p.name: {} for p in NOISE_PROTOCOLS}
 
     noise_model = NoiseModel()
     noise_model.add_all_qubit_quantum_error(depolarizing_error(p_2q, 2), ["cx", "cz"])
@@ -135,7 +140,7 @@ def noise_benchmark(L_range: List[int], p_2q: float = 1e-2, shots: int = 4096) -
     # Qiskit doesn't directly compute expectations; we measure in each basis
     # and estimate from shots.
 
-    for p in PROTOCOLS[:3]:
+    for p in NOISE_PROTOCOLS:
         for L in L_range:
             qc = p.build_circuit(L)
             idx = qidx(L)

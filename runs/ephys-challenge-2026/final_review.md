@@ -1,171 +1,191 @@
-# Final Review — Phase 5 (Review Board)
+# Final Review — Phase 5 v2 (MOCU Protocol Addition)
 
-*Evaluating the full research cycle on the 2026 NCCU Institute of Applied
-Physics open challenge ("Spooky Action at a Distance in Quantum Circuits").*
+*Three-reviewer audit of the v2 measurement-free protocol added to the
+2026 NCCU Institute of Applied Physics submission.*
 
-The Review Board is a panel of three personas: **The Math Pedant**,
-**The Performance Hacker**, and **The Domain Expert**. Each reports
-separately; the final verdict consolidates.
+The Review Board panel: **The Math Pedant**, **The Performance Hacker**,
+and **The Domain Expert**. Each reports separately; the consolidated
+verdict appears at the end.
+
+The v1 protocol (constant-depth entanglement swapping with
+mid-circuit measurement and feed-forward) and its review are preserved
+in `final_review_v1.md`. Submission bundle `./submission/` is untouched
+in v2 — competition-ready as of 2026-04-23.
 
 ---
 
-## 1. The Math Pedant (`./report/main.tex` + `./theory_draft.md`)
+## 1. The Math Pedant (`./theory_draft.md` + `./report/main.tex` Appendix)
 
 ### Scope of review
 
-I re-derived the core stabiliser calculations of the report by hand and
-cross-checked them against the stabiliser trace emitted by
-`tests/test_stabiliser_consistency.py`.
+I re-derived the MOCU stabiliser propagation by hand for $L=4$ and
+cross-checked against the stim trace from
+`tests/test_mocu.py::test_stim_exact_fidelity`.
 
 ### Findings
 
-1. **§3 (`N = 4` derivation).** Steps A and B are correctly tracked.
-   The X-pattern matrix has rank 4; the kernel basis
-   `(1,0,1,0,1,0)` and `(0,1,0,1,0,1)` is correctly identified. The
-   boxed products
-   `P_{XX} = X_{e_0} Z_1 Z_3 X_{e_1}` and
-   `P_{ZZ} = Z_{e_0} Z_2 Z_4 Z_{e_1}` are correct. The post-measurement
-   stabilisers `(-1)^{m_1+m_3} X_{e_0}X_{e_1}`,
-   `(-1)^{m_2+m_4} Z_{e_0}Z_{e_1}` are correct, and the correction
-   `X^{m_2 ⊕ m_4} Z^{m_1 ⊕ m_3}` on `e_1` is the unique choice that
-   lands every branch on `|Φ^+⟩`. ✔
+1. **§2.1 (Forward sweep proof).** The orbit of $Z_m$ under $H + $ Phase B
+   is the global $X$-string $X_0 X_1 \cdots X_L$. The other initial
+   $Z_k$ generators each pick up a $Z_a$ factor from each CNOT they
+   target, leaving the chain $\{Z_{k-1} Z_k\}$. Both claims are correct.
+   ✔
+2. **§2.2 (Reverse sweep proof, after RA Flaw 1 fix).** The four bullets
+   in the inductive step now correctly track:
+   - the big $X$-string losing its $X_{m-s}$ factor by $X_c \to X_c X_t$
+     cancellation (with the existing $X_{m-s}$),
+   - the outer Z-pair $Z_{m-s-1} Z_{m-s}$ collapsing to the single-site
+     $Z_{m-s}$,
+   - the inner Z-pair $Z_{m-s} Z_{m-s+1}$ becoming
+     $Z_{m-s-1} Z_{m-s} Z_{m-s+1}$ and reducing to the jump-pair
+     $Z_{m-s-1} Z_{m-s+1}$ via the freshly-formed singleton, and
+   - all other generators untouched.
 
-2. **§4.1 (even-`N` induction).** Base case `r = 0` explicitly checks out;
-   the induction reduces cleanly. ✔
-
-3. **§4.2 (odd-`N` via GHZ-3).** The `N = 3` stabiliser trace in the
-   report matches my independent re-derivation; the unified correction
-   formula
-   `a = XOR_{j even} m_j`, `b = XOR_{j odd} m_j`
-   is correct. ✔
-
-4. **Unified formula.** Verified that the `r = 0` even case gives
-   the identity correction (empty sums), and that the `N = 1` odd case
-   reduces to `Z^{m_1}` on `e_1` — both match the theory. ✔
-
-5. **Connectivity audit.** Every two-qubit gate in the explicit gate
-   lists of §3–§4 is on a top-leg edge. The rejection of the rung-fix
-   (§4.3) is correctly argued by the "+2 intermediate qubits per rung
-   detour" parity invariant. ✔
-
-6. **Minor:** the hand-written Qcircuit diagram in the report (Fig. 2)
-   is schematic; Qiskit's `QuantumCircuit.draw` output
-   (`submission/circuit_diagram.pdf`) is the authoritative machine-rendered
-   version.
+   The inductive invariant $A_s = A_{s-1} \setminus \{m-s, m+s\}$
+   carries cleanly to the terminal $A = \{0, L\}$, at which point the
+   stabilisers are exactly those of $\Phip_{(e_0,e_L)} \otimes
+   \ket{0}^{\otimes(L-1)}$. ✔
+3. **§3 (Worked example $L=4$).** Layer-by-layer Heisenberg trace
+   reproduces the GHZ_5 stabilisers after layer 4 and the target
+   stabiliser group after layer 6. I re-derived this myself and
+   confirm the final reduction
+   $\{X_0 X_4, Z_0 Z_4, Z_1, Z_2, Z_3\}$. ✔
+4. **§3.3 (Boundary cases $L=1, 2, 3$).** All three small-$L$ recipes
+   are correctly handled by `mocu.build_circuit`, as verified by the
+   stim sweep for $L = 1, \dots, 10$ (Bell fidelity $= 1$ to machine
+   precision). ✔
+5. **§4 (Resource analysis).** Depth $= L + 2$ upper bound is correct;
+   the actual Qiskit-reported depth is $L + 2$ for even $L$ and $L + 1$
+   for odd $L$ (because the reverse-sweep solo CNOT and the first
+   parallel pair can interleave with the forward sweep's last layer
+   without violating the stabiliser invariants). 2Q-gate count $2L - 1$
+   matches `tests/test_mocu.py::test_two_qubit_gate_count` exactly. ✔
+6. **Appendix in `main.tex`.** Same content as `theory_draft.md`,
+   appropriately compressed for the LaTeX surface. The appendix
+   compiles cleanly with `xelatex` (12 pages total report, up from 9).
+   The "back-references" to body sections use existing `\label{}`s
+   (`sec:resources`, `sec:process`) — verified compile-time. ✔
 
 ### Verdict (Math Pedant)
 
-All mathematical claims are correct, and every stabiliser derivation is
-internally consistent and cross-validated by the `stim`-based exact test
-suite. **PASS.**
+All MOCU mathematical claims are correct; the proof is internally
+consistent after RA Flaw 1 (mis-stated Z-pair conjugation rule) was
+fixed; the worked $L = 4$ example reproduces the target stabiliser
+group exactly; and the stim test suite cross-validates every claim
+numerically. **PASS.**
 
 ---
 
-## 2. The Performance Hacker (`./analysis/`)
+## 2. The Performance Hacker (`./analysis/mocu.py` + tests)
 
 ### Scope of review
 
-- Code cleanliness, modularity, and dependency hygiene.
-- Choice of simulation backend and exploitation of Clifford structure.
-- Resource-limit compliance (16 GB cap, 4 BLAS threads).
-- Correctness of the feed-forward logic in Qiskit's dynamic-circuit API.
+- Module structure and adherence to the v1 conventions.
+- Correctness of the middle-out scheduling (left vs right solo).
+- Connectivity, no-measurement, gate-count invariants.
+- Test coverage and cross-validation.
+- Integration into `scaling_benchmark.PROTOCOLS` and noise sweep.
 
 ### Findings
 
-1. **Project structure.** Modules are clearly separated:
-   `ladder_graph.py` (topology), `validate_connectivity.py` (edge check),
-   `entanglement_swap.py` / `swap_chain.py` / `cat_chain.py` /
-   `cluster_ladder.py` (protocol builders), `verification.py`
-   (Statevector), `stim_verification.py` (Clifford), `scaling_benchmark.py`
-   (resource sweep + noise), `main.py` (driver), `resource_limits.py`
-   (mem/thread caps). `uv`-managed with `pyproject.toml` and `uv.lock`.
-   Clean. ✔
+1. **Module structure.** `mocu.py` (76 lines) imports `_top_chain` from
+   `entanglement_swap` and `n_qubits` from `ladder_graph` — reusing
+   existing infrastructure, no duplication. The single public
+   `build_circuit(L)` function returns a Qiskit `QuantumCircuit` with
+   no `ClassicalRegister`, no measurements, only `H` and `CNOT` —
+   the cleanest possible API for a unitary protocol. ✔
+2. **Scheduling.** The "solo on the longer side" heuristic (lines
+   42–48) is correctly implemented: when `right_n >= left_n` we apply
+   `CNOT(q_m, q_{m+1})` solo first; otherwise the symmetric left
+   choice. The subsequent parallel-expand loop (lines 50–60) advances
+   one CNOT on each side per iteration, which is the depth-optimal
+   schedule modulo the unavoidable solo. ✔
+3. **No-measurement invariant.** Verified explicitly by the test
+   `test_no_measurements`: zero `measure` instructions and zero
+   classical bits at every $L$. ✔
+4. **Connectivity.** All 10 $L$ values pass `validate_connectivity`. ✔
+5. **Gate counts.** For $L = 1, \dots, 10$ the actual 2Q-gate count is
+   $\{1, 3, 5, 7, 9, 11, 13, 15, 17, 19\}$ — exactly $2L - 1$. ✔
+6. **Stim Clifford simulation.** All 10 $L$ values plus the spot
+   checks at $L = 20, 30, 50$ give Bell fidelity $= 1$ exactly via
+   `peek_observable_expectation` (which is exact for stabiliser
+   states). ✔
+7. **Statevector cross-check.** All 6 small-$L$ values give fidelity
+   $= 1$ to machine precision via Qiskit's `Statevector` simulator.
+   This is independent of the stim path. ✔
+8. **Noise sweep integration.** `scaling_benchmark.PROTOCOLS` now
+   includes MOCU as a fifth protocol (purple); the `noise_benchmark`
+   helper has been extended to skip only `cluster_ladder` (whose v1
+   correction map is incomplete). The full re-run produces the
+   updated `simulation.log` with per-$L$ noise fidelities for all
+   four working protocols. ✔
+9. **Test count.** The MOCU test file adds 49 tests
+   (10 connectivity + 10 no-measurement + 10 gate-count
+   + 10 stim-exact + 3 large-$L$ stim + 6 statevector). All passing.
+   Combined with the v1 test suite (83 tests), the project now has
+   **132 passing tests**. ✔
 
-2. **Stabiliser simulation.** Using `stim.TableauSimulator` with
-   `postselect_z` + `peek_observable_expectation` is the right choice:
-   every Clifford branch is handled in polynomial time and with exact
-   arithmetic. Statevector verification is kept as an independent
-   cross-check for `L ≤ 6`. ✔
+### Minor non-blocking observations
 
-3. **Dynamic circuits in Qiskit.** The `if_test` context manager correctly
-   encodes each `X^{m_j}` or `Z^{m_j}` on `e_1` as a classically-conditioned
-   gate. Because `X^2 = Z^2 = I`, the chain of `if_test`s naturally
-   computes XOR parities. Aer's density-matrix simulator handles these
-   faithfully (verified numerically: the 0.928-fidelity result at
-   `L = 10, p_2 = 10^{-2}` matches the theoretical estimate
-   `(1 - 10^{-2})^{12} ≈ 0.886` for our 12 CNOTs + additional single-qubit
-   error contributions in the same ballpark).
-
-4. **Resource limits.** `resource_limits.py` is imported first in every
-   executable entry point (`main.py`, `verification.py`,
-   `stim_verification.py`). Memory cap `RLIMIT_AS` is set to 16 GB and
-   all BLAS-related env vars are set to 4 threads. ✔
-
-5. **Tests.** 83 pytest tests in `./analysis/tests/`, all passing:
-   - `test_connectivity.py` — 40 tests covering `L = 1..10` × 4 protocols.
-   - `test_small_L.py` — 30 tests covering `L = 1..10` × 3 protocols
-     (exact fidelity via stim).
-   - `test_feedforward.py` — 11 tests exercising the closed-form
-     correction for specific outcomes and for `L = 2..10`.
-   - `test_stabiliser_consistency.py` — 2 tests checking the
-     post-Step-B stabilisers literally match §3 of the report for `N = 4`.
-
-6. **Minor suggestions** (not blocking):
-   - The `cluster_ladder` protocol fails at `L = 3` (fidelity 0 in the
-     Statevector test) because its correction map (which was hand-written
-     as a stretch goal) is not the minimum-fidelity-zero correction for
-     that specific case. Since it is a stretch-goal variant not claimed
-     in the main protocol, this can be left for a follow-up.
-   - `verification.py` partial-trace computation could use Qiskit's
-     `DensityMatrix.partial_trace` directly, but the hand-written version
-     is correct and avoids an allocation.
+- `mocu.py` does not invoke `resource_limits` directly; this is fine
+  because the test runner and `main.py` import it once at the top of
+  the executable entry point, so the limits are inherited.
+- The barrier between forward and reverse sweeps is decorative —
+  Qiskit's `depth()` ignores it. This matches the theoretical depth
+  $L + 2$ (or $L + 1$ for odd $L$).
 
 ### Verdict (Performance Hacker)
 
-Code is clean, fast, and rigorously tested. The choice of `stim` for the
-Clifford-exact verification is the right trade-off. **PASS.**
+The implementation is concise (76 lines of code), the test suite is
+thorough, and the integration into the existing harness is purely
+additive. **PASS.**
 
 ---
 
-## 3. The Domain Expert (competition-rule compliance + physical sanity)
+## 3. The Domain Expert (physical sanity + competition-rule alignment)
 
 ### Scope of review
 
-- Check every bullet of §3 of the competition rules is satisfied.
-- Check the submitted Bell state matches the theoretical prediction.
-- Check the noise-model result is physically reasonable.
+- Does the new MOCU protocol respect the competition's connectivity
+  constraints (top-leg only)?
+- Is the noise-fidelity behaviour physically reasonable?
+- Does the v2 work preserve the v1 submission bundle?
 
-### Competition rules §3 checklist
+### Findings
 
-| Requirement | Status | Evidence |
-|---|---|---|
-| Circuit diagram + explanation | ✔ | `submission/circuit_diagram.pdf` (generated from Qiskit) + Fig. 2 / §3 of `submission/submission.pdf`. |
-| Declared Bell state (`|Φ^+⟩`) | ✔ | Boxed in §3.4 of the report; derivation in §3.3; numerical verification for all branches. |
-| Solution verification methods / derivations | ✔ | §6 of the report; `analysis/simulation.log`; 83-test pytest suite. |
-| Code + packages + exec instructions | ✔ | `submission/code_bundle.zip` contains `pyproject.toml`, `uv.lock`, entry-point instructions in §7 of the report (`uv sync && uv run python main.py`). |
-| Research-process description (incl. AI tool disclosure) | ✔ | `submission/research_process.md` (standalone) + §8 of the report. Explicitly lists Claude Code's role and scope. |
+1. **Connectivity.** MOCU touches only top-leg edges — no rungs, no
+   bottom-leg gates. This satisfies the challenge's allowed-edge
+   set trivially. ✔
+2. **Noise behaviour.** At $p_2 = 10^{-2}$ depolarising noise on every
+   2Q gate:
+   - $L = 1$: $0.992$ (vs $\Phip$ unitary baseline $1 - p_2 = 0.99$,
+     consistent with single-CNOT error).
+   - $L = 10$: $0.885$.
+   - Compare: `entanglement_swap` (v1) $0.928$, `cat_chain` $0.928$,
+     `swap_chain` $0.816$.
 
-### Physical-intuition sanity check
-
-- **Bell fidelity 1.0 across all branches (Clifford simulation):** expected; the protocol is a Clifford circuit and the correction map was derived to exactly cancel the outcome-dependent Pauli frame.
-- **Depth `≤ 7` (with feed-forward), flat in `L`:** matches the theoretical `O(1)` result; confirmed in `simulation.log` (depth column). Note: the numerical depth *does* grow slightly with `L` because Qiskit's `.depth()` counts the number of `if_test` blocks sequentially (one per feedforward bit). A tighter classical-controller implementation would compute the XOR parities in a single classical-register operation and apply a single conditional `X`/`Z`. This is a Qiskit-level optimisation not a physics-level caveat.
-- **Noise benchmark (`p_2 = 10^{-2}` depolarising):** `L = 10` fidelities are `0.928` (ours) vs `0.928` (cat-chain) vs `0.816` (SWAP-chain). Our advantage over SWAP-chain is `\sim 11\%` at `L = 10`, consistent with the `3\times` 2Q-gate-count difference. Our fidelity matches cat-chain because they have the same 2Q-gate count; the depth advantage manifests under T1/T2 decoherence noise (not depolarising), which is a follow-up simulation.
-
-### Submission-bundle completeness
-
-```
-submission/
-├── submission.pdf            ✔ 9-page XeLaTeX report, matches rules §3.
-├── circuit_diagram.pdf       ✔ Qiskit-rendered circuit for N=4.
-├── code_bundle.zip           ✔ Analysis/ tree with pyproject.toml + lockfile.
-└── research_process.md       ✔ AI-tool disclosure per rules §3.
-```
+   The MOCU result sits where the heuristic predicts (between
+   `cat_chain` and `swap_chain` because MOCU has the cat-chain's
+   trace-out advantage on intermediates but pays for $L - 1$ extra
+   CNOTs on the disentangle). The empirical $0.885$ is slightly above
+   the leading-order $(1 - p_2)^{2L-1} = 0.826$ because errors on
+   intermediates that are eventually disentangled to $\ket 0$
+   partially cancel under partial trace — a physical effect flagged
+   by the RA Skeptic in v2 Flaw 6 and confirmed numerically. ✔
+3. **Submission bundle integrity.** `./submission/` is untouched. The
+   v1 PDF, code zip, and `research_process.md` remain bit-identical.
+   The competition deadline (2026-05-06 23:59) was already met by v1;
+   v2 is an additive technical contribution, not a submission revision. ✔
+4. **Report structure.** `./report/main.pdf` now has 12 pages, with
+   the new appendix (§A, sub-sections A.1–A.6) cleanly delimited from
+   the body of the report. The appendix only references body sections
+   that exist (verified) and concludes with implementation pointers. ✔
 
 ### Verdict (Domain Expert)
 
-All competition-rule bullets are covered by corresponding artifacts; the
-Bell state is correctly identified and verified numerically; the noise
-benchmark is physically reasonable. **PASS.**
+The MOCU addition is a physically meaningful, technically sound, and
+honestly framed unitary alternative to the v1 protocol. It strengthens
+the report's "we considered the alternatives" story without
+compromising the v1 submission. **PASS.**
 
 ---
 
@@ -173,34 +193,62 @@ benchmark is physically reasonable. **PASS.**
 
 All three reviewers: **PASS.**
 
-The submission bundle at `./submission/` is competition-ready for upload
-to the registration URL
-<https://forms.gle/bDQBQZ8aSJuHbzZE7> before the 2026-05-06 23:59
-deadline.
+### Summary of v2 deliverables
 
-### Highlights for the Innovation-Award angle
+| Artifact | Path | Status |
+|---|---|---|
+| Theory draft | `./theory_draft.md` | ✔ Replaces v1; v1 archived to `theory_draft_v1.md` |
+| RA critique | `./ra_critique.md` | ✔ Replaces v1; v1 archived to `ra_critique_v1.md` |
+| Report (with appendix) | `./report/main.pdf` (12 pp.) | ✔ Recompiled |
+| Report source | `./report/main.tex` | ✔ Appendix added |
+| Implementation | `./analysis/mocu.py` | ✔ 76 lines |
+| Tests | `./analysis/tests/test_mocu.py` | ✔ 49 tests, all passing |
+| Scaling/noise | `./analysis/scaling_benchmark.py` | ✔ MOCU registered |
+| Simulation log | `./analysis/simulation.log` | ✔ v1 archived to `simulation_v1.log` |
+| Final review | `./final_review.md` (this file) | ✔ |
 
-- **Constant-depth quantum circuit** vs `O(L)` for SWAP-chain and
-  cat-disentangle baselines — the same dynamic-circuit advantage that
-  Bäumer et al. demonstrated experimentally for 101-qubit long-range
-  CNOT teleportation, specialised here to the ladder QPU.
-- **Full stabiliser-formalism proof** including the non-trivial odd-`N`
-  parity fix via a GHZ-3 link at one end.
-- **Clean closed-form feed-forward correction map** with a single
-  unified formula for every `L ≥ 1`.
-- **Pareto-dominant** in quantum-gate depth and two-qubit-gate count
-  compared to all constant-depth alternatives (cluster-state variant).
+### Headline result
 
-### Optional follow-ups (not required for submission)
+| Protocol | Depth ($L=10$) | 2Q gates ($L=10$) | Measurements | Fidelity ($p_2{=}10^{-2}$, $L=10$) |
+|---|---|---|---|---|
+| `entanglement_swap` (v1, with FF) | 15 | 10 | 9 | 0.928 |
+| `cat_chain` (with measurement) | 22 | 10 | 9 | 0.928 |
+| **`mocu` (v2, unitary)** | **12** | **19** | **0** | **0.885** |
+| `swap_chain` (unitary baseline) | 29 | 28 | 0 | 0.816 |
 
-- Fix the `cluster_ladder` stretch-variant correction map so its
-  numerical test passes for all `L`.
-- Add a T1/T2 decoherence noise model to make the depth advantage
-  numerically explicit in the benchmark.
-- Extend stabiliser simulation spot checks to `L = 100, 200` to
-  emphasise scalability.
+MOCU achieves the lowest depth among the unitary protocols and avoids
+all measurement; the price is roughly twice the 2Q-gate count of
+`cat_chain` (because every disentanglement is paid for in CNOTs rather
+than measurement+feedforward), and the noise fidelity sits between the
+two measurement-based protocols and the SWAP-chain baseline.
+
+### Innovation angle (preserved)
+
+The v1 Innovation Award angle (constant-depth dynamic-circuit protocol
+beating the Lieb-Robinson light-cone) is unchanged. The v2 contribution
+strengthens the technical story by:
+
+1. **Explicitly demonstrating** that the LOCC depth advantage of v1 is
+   not an artefact — when forced to be unitary, the protocol falls back
+   to $\Theta(L)$ depth, matching the Lieb-Robinson lower bound.
+2. **Providing a hardware-universal fallback** for platforms without
+   mature dynamic-circuit support.
+3. **Halving the depth constant** of the canonical end-start GHZ-disentangle
+   via the middle-out scheduling — a clean, easily-implemented
+   optimisation.
+
+### Optional follow-ups (not blocking)
+
+- A T1/T2 decoherence noise model would make MOCU's depth disadvantage
+  vs the v1 protocol numerically explicit (the depolarising channel
+  used here is depth-blind under the partial-trace convention).
+- Extend stim spot-checks for MOCU to $L = 100, 200$ for parity with
+  the v1 large-$L$ check.
+- Re-package `./submission/` with the v2 appendix included if the
+  organisers issue a request for a revised submission. (Not initiated
+  proactively to avoid altering the bit-identical v1 bundle.)
 
 ### Graceful termination
 
-Phase 5 is complete. The research cycle terminates cleanly here. No
-further phases are required.
+Phase 5 v2 is complete. Both v1 and v2 research cycles terminate
+cleanly. No further phases are required unless the user requests one.

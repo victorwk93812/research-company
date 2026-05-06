@@ -644,6 +644,147 @@ long-range CNOT teleportation by Bäumer \textit{et al.}\ (2024) and
 quantum fan-out by Song \textit{et al.}\ (2024), now specialised to the
 exact ladder topology of the challenge.
 
+\appendix
+
+\section{Measurement-Free Variant: Middle-Out Cat-Uncompute (MOCU)}\label{sec:mocu}
+
+\subsection{Motivation}
+
+The body of this report (the body sections) presents
+a constant-depth protocol that relies on mid-circuit measurement and
+classical feed-forward. Because some hardware platforms either lack or
+have limited support for dynamic-circuit primitives, we add here a fully
+\emph{unitary}, measurement-free variant. The cost is the
+Lieb-Robinson light-cone tax: any unitary protocol composed of nearest-neighbour
+gates on a 1D chain must have depth $\Omega(L)$ to produce entanglement
+across $L$ edges. Our construction, the Middle-Out Cat-Uncompute (MOCU),
+saturates this bound at $L+2$.
+
+\subsection{The protocol}
+
+Relabel the top-leg qubits as $q_0=e_0,q_1,\dots,q_L=e_1$. Choose middle
+$m=\lfloor L/2\rfloor$.
+
+\paragraph{Phase A (plant).} Apply $H$ to $q_m$.
+
+\paragraph{Phase B (spread).} Build the $(L+1)$-qubit GHZ state on the top
+leg by expanding outward in both directions. The first CNOT must be a
+solo CNOT on the longer side (because $q_m$ cannot be the control of two
+gates simultaneously); subsequent layers parallelise one CNOT per side.
+Forward depth $= \lceil L/2\rceil + 2$.
+
+\paragraph{Phase C (shrink).} Disentangle inner qubits one at a time,
+starting from the centre and moving outward. The first reverse CNOT is
+$\CNOT(q_{m-1},q_m)$ alone, which fixes $q_m$ to $\ket 0$. Subsequent
+layers apply, in parallel,
+$\CNOT(q_{m-s-1},q_{m-s})$ on the left and $\CNOT(q_{m+s+1},q_{m+s})$ on
+the right, for $s=1,2,\dots$, terminating when the only GHZ-active sites
+left are $q_0$ and $q_L$.
+
+\subsection{Stabiliser proof sketch}
+
+After Phase B the top-leg stabiliser group is
+$\langle X_0X_1\cdots X_L,\;Z_iZ_{i+1}: 0\le i\le L-1\rangle$ — the standard
+GHZ stabilisers. We show by induction on the number of disentanglement
+layers $s$ that after step $s$ of Phase C, the active GHZ subset
+$A_s\subseteq\{0,\dots,L\}$ contains exactly $q_0$ and $q_L$ plus the
+yet-untouched middle band, and the stabiliser group is
+$$\big\langle \textstyle\bigotimes_{i\in A_s}X_i,\;\{Z_iZ_j: i,j\text{ adjacent in }A_s\}\cup\{Z_k: k\notin A_s\}\big\rangle.$$
+The CNOT $\CNOT(q_{m-s-1},q_{m-s})$ removes $X_{m-s}$ from the big string
+(by $X_c\to X_cX_t$ cancellation) and converts the outer Z-pair
+$Z_{m-s-1}Z_{m-s}$ into a single-site $Z_{m-s}$, while the inner Z-pair
+$Z_{m-s}Z_{m-s+1}$ becomes $Z_{m-s-1}Z_{m-s}Z_{m-s+1}$, which reduces to
+the new jump-pair $Z_{m-s-1}Z_{m-s+1}$ modulo the freshly-formed singleton.
+The mirror argument applies on the right. After $\lceil L/2\rceil$ steps,
+$A=\{0,L\}$, and the group simplifies to
+$\langle X_0X_L,\;Z_0Z_L,\;Z_1,\dots,Z_{L-1}\rangle$, which is the
+stabiliser group of $\Phip_{(e_0,e_1)}\otimes\ket 0^{\otimes(L-1)}$.
+
+A worked $L=4$ example with explicit Heisenberg-picture stabiliser tracking
+is given in Section~3 of \texttt{theory\_draft.md} (run repository).
+
+\subsection{Resource comparison}
+
+Table~\ref{tab:mocu-resources} compares MOCU against the four baselines
+already discussed in \S\ref{sec:resources}. Numbers are taken from the
+re-run of \texttt{simulation.log} after MOCU was added to
+\texttt{scaling\_benchmark.PROTOCOLS}.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Protocol & Depth ($L=10$) & 2Q gates ($L=10$) & Measurements & Noise fid.\ ($p_2{=}10^{-2}$, $L{=}10$) \\
+\midrule
+\texttt{entanglement\_swap} (v1) & 15 & 10 & $L-1=9$ & 0.928 \\
+\texttt{cat\_chain} & 22 & 10 & $L-1=9$ & 0.928 \\
+\texttt{mocu} (this appendix) & 12 & 19 & 0 & 0.885 \\
+\texttt{swap\_chain} & 29 & 28 & 0 & 0.816 \\
+\bottomrule
+\end{tabular}
+\caption{Resource summary at $L=10$. The
+\texttt{entanglement\_swap} depth includes the $\le 9$ feed-forward
+\texttt{if\_test} blocks, which Qiskit's \texttt{depth()} counts as
+sequential operations; on a tightly compiled classical-controller
+implementation this would collapse to a single conditional layer (depth
+$\le 7$). MOCU achieves the lowest unitary depth and avoids measurements
+entirely; its 2Q-gate count is roughly twice that of \texttt{cat\_chain}
+because the disentanglement of every inner qubit is paid for in CNOTs
+rather than measurement+feedforward.}
+\label{tab:mocu-resources}
+\end{table}
+
+\subsection{Numerical verification}
+
+The MOCU implementation lives in \texttt{analysis/mocu.py}
+and is exercised by 49 \texttt{pytest} tests in
+\texttt{analysis/tests/test\_mocu.py}, all passing:
+\begin{itemize}
+\item \emph{Connectivity:} every CNOT lands on a top-leg edge, for
+  $L=1,\dots,10$.
+\item \emph{No measurements:} the constructed circuit has zero measurement
+  instructions and zero classical bits.
+\item \emph{Two-qubit gate count:} exactly $2L-1$ for every $L$.
+\item \emph{Stim Clifford-exact fidelity:} after post-selecting every
+  intermediate qubit to $\ket 0$ (which is deterministic for MOCU),
+  $\langle\Phi^+|\rho_{e_0e_1}|\Phi^+\rangle = 1$ to machine precision
+  for $L=1,\dots,10$ and the spot-check values $L=20,30,50$.
+\item \emph{Statevector cross-check:} for $L=1,\dots,6$, the full
+  Qiskit \texttt{Statevector} of the MOCU circuit overlaps with
+  $\Phip_{e_0e_1}\otimes\ket 0^{\otimes(2L-1)}$ to fidelity $>1-10^{-9}$.
+\end{itemize}
+
+The depolarising-noise benchmark at $p_2=10^{-2}$ produces, for $L=1,\dots,10$,
+the fidelity sequence
+$0.992,0.978,0.963,0.951,0.940,0.928,0.917,0.906,0.895,0.885$ — strictly
+between \texttt{cat\_chain} (which gets the same intermediate-qubit
+``free trace-out'' but with half the gate count) and \texttt{swap\_chain}.
+The empirical fidelity at $L=10$ is slightly higher than the leading-order
+estimate $(1-p_2)^{2L-1}\approx 0.826$ because errors on intermediate
+qubits that are eventually disentangled to $\ket 0$ partially cancel
+under partial trace.
+
+\subsection{When to prefer MOCU over the v1 protocol}
+
+The v1 measurement-based protocol is depth-superior at high $L$ and on
+hardware with mature dynamic-circuit support. MOCU is preferable when:
+\begin{enumerate}
+\item the target hardware lacks mid-circuit measurement or classical
+  feed-forward primitives;
+\item one wants a self-contained unitary description (e.g.\ for
+  inclusion in a larger circuit identity, or for analytical proofs that
+  rely on unitarity);
+\item shallow $L$ ($L\lesssim 5$) where the depth difference is small
+  and the simpler unitary is easier to compile.
+\end{enumerate}
+For high-$L$, low-noise applications the v1 protocol dominates.
+
+\subsection*{Implementation note}
+The reference implementation is \texttt{analysis/mocu.py};
+the test suite is \texttt{analysis/tests/test\_mocu.py};
+the rebuilt simulation log including MOCU is
+\texttt{analysis/simulation.log}.
+
 \begin{thebibliography}{99}
 
 \bibitem{ZukowskiZeilinger1993}

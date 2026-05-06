@@ -1,199 +1,224 @@
-# Objective
+# Objective (v2 — Measurement-Free Variant)
 
-**Design, verify, and implement a scalable quantum circuit that places the two far-end qubits `e0` and `e1` of a two-legged ladder QPU into a Bell state, using only single-qubit gates and nearest-neighbour two-qubit gates.**
+**Add a fully unitary, measurement-free protocol that prepares `|Φ⁺⟩` on the
+two far-end qubits `e0`, `e1` of the ladder QPU, complementing the existing
+feed-forward entanglement-swap protocol (v1).**
 
-Our proposition (from `prompt.txt`) is to use **entanglement swapping along the top leg** rather than a plain SWAP chain or a GHZ-style unitary. The research run must prove this works, identify which Bell state it produces, generalise it to arbitrary ladder length `L`, benchmark it against baselines, and submit to the 2026 Institute of Applied Physics / NCCU challenge (see `2026_challenge_markdown/2026_challenge.md`).
+The user has proposed the following idea:
 
-**Key dates:**
-- Preliminary submission deadline: **2026-05-06, 23:59**
-- Finals (oral presentation): **2026-05-16** at NCCU IIR Campus
-- Today: 2026-04-23 → ~2 weeks to preliminary, ~3 weeks to finals.
+> "First apply entanglement to the middle sites and distribute the
+> entanglement further site-by-site until the boundaries, and then sweep
+> back to cancel the entanglements."
 
----
+This is a **Middle-Out Cat-Uncompute (MOCU)** protocol: a unitary
+analogue of `cat_chain` (which uses X-basis measurements), with the
+extra optimisation that the GHZ is grown **from the centre** so the
+forward sweep depth is `≈⌈L/2⌉ + 2` instead of `L + 1`. The reverse
+sweep then "shrinks" the GHZ from the inside outward, leaving `|Φ⁺⟩`
+between `e0` and `e1` and `|0⟩` on every intermediate qubit.
 
-# Background: The QPU Layout
-
-From Fig. 1 of the challenge (L=5 example, 12 qubits total):
-
-```
-  e0 ─── 1 ─── 2 ─── 3 ─── 4 ─── e1     (top leg)
-         │     │     │     │
-   6 ─── 7 ─── 8 ─── 9 ──── 10 ── 11    (bottom leg)
-```
-
-**Connectivity rules (what two-qubit gates are allowed):**
-- Top leg: `e0–1, 1–2, 2–3, 3–4, 4–e1` (and analogously for longer `L`).
-- Bottom leg: `6–7, 7–8, 8–9, 9–10, 10–11`.
-- Rungs: `1–7, 2–8, 3–9, 4–10` — **only between the inner columns**, NOT between the end columns (`e0` is *not* connected to `6`, and `e1` is *not* connected to `11`).
-
-**Scalable layout (Fig. 2):** for generic `L` the top leg has `L+1` qubits (`e0`, `u_1`, …, `u_{L-1}`, `e1`), the bottom leg has `L+1` qubits (`v_0`, `v_1`, …, `v_L`), and rungs exist only at `u_i–v_i` for `i = 1, …, L-1`. Let `N = L-1` be the number of inner top qubits.
+This run is purely **additive**: do not alter the v1 submission bundle
+or the existing test suite. v1 artifacts have been snapshotted to
+`./instruction_v1.md`, `./theory_draft_v1.md`, `./ra_critique_v1.md`,
+`./final_review_v1.md`. v1 source code in `./analysis/` is left in
+place — new modules and tests are added next to it.
 
 ---
 
-# Our Starting Proposition (from `prompt.txt`)
+# Background: Why a Measurement-Free Variant?
 
-Entanglement-swapping chain along the top leg:
+The v1 entanglement-swap protocol achieves `O(1)` depth, but only
+because Qiskit's dynamic-circuit primitives encode mid-circuit
+measurement and classical feed-forward — a feature not yet supported on
+all hardware. A **purely unitary** protocol:
 
-1. **Prepare Bell pairs on alternating links:** apply `H` and `CNOT` to create $|\Phi^+\rangle$ on `(e0, 1)`, `(2, 3)`, `(4, e1)` — three independent Bell pairs, all formed with nearest-neighbour gates (legal).
-2. **Couple the chain via Bell-type gates:** apply further gates to entangle `(1, 2)` and `(3, 4)` — these are nearest neighbours on the top leg (legal).
-3. **Bell-measure the intermediate qubits:** measure qubits `1, 2, 3, 4` (or equivalently perform Bell measurements on pairs `(1,2)` and `(3,4)`); apply conditional single-qubit `X`/`Z` corrections on `e0` and `e1` to collapse the residual state into a definite Bell state.
+- Runs on any hardware that supports nearest-neighbour CNOT (no MCM/FF).
+- Has a clean closed-form correctness proof (Heisenberg-picture
+  stabiliser propagation, no outcome branching).
+- Pays for these wins with `O(L)` depth (Lieb-Robinson bound for unitary
+  protocols on a 1D chain).
 
-This is textbook repeater-style entanglement swapping, specialised to four intermediate qubits. The research tasks below verify it is correct for `N=4`, extend it to arbitrary `N`, identify the output Bell state, and benchmark.
+Compared to existing baselines:
+- vs `swap_chain`: ~2× fewer 2Q gates (no SWAP triples).
+- vs `cat_chain`: same gate count, but no measurements.
+- vs `entanglement_swap` (v1): `O(L)` depth instead of `O(1)` — clear
+  trade-off.
+
+This is a **textbook unitary cat / disentangle** circuit. The main novelty
+of the v2 work is the **middle-out scheduling** that halves the depth
+constant, and the integration into the existing benchmarking
+infrastructure for an honest side-by-side comparison.
+
+---
+
+# The MOCU Protocol — Definition
+
+Top-leg qubits: `q_0 = e0, q_1, q_2, ..., q_{L-1}, q_L = e1` (so `L+1`
+qubits). Choose middle `m = ⌊L/2⌋`.
+
+## Phase A — "Plant" entanglement at the middle
+- `H(q_m)` brings `q_m` into `|+⟩`.
+
+## Phase B — "Spread" the GHZ outward (forward sweep)
+- For each layer `r = 1, 2, ..., max(m, L-m)`:
+  - In parallel, apply
+    - `CNOT(q_{m+r-1}, q_{m+r})` if `m+r ≤ L`, and
+    - `CNOT(q_{m-r+1}, q_{m-r})` if `m-r ≥ 0`.
+- After this sweep, the top leg is in
+  `GHZ_{L+1} = (|0...0⟩ + |1...1⟩)/√2`.
+
+The first layer cannot do both `CNOT(q_m, q_{m-1})` and
+`CNOT(q_m, q_{m+1})` in parallel because they share the control `q_m`.
+So the forward depth is `1 + (max(m, L-m) + 1)` = `max(m, L-m) + 2`.
+
+## Phase C — "Shrink" the GHZ inward (reverse sweep)
+- For each layer `s = 1, 2, ..., max(m, L-m) - 1`:
+  - In parallel, apply CNOTs that disentangle the innermost-still-GHZ
+    qubits using their outermost-still-GHZ neighbour as control.
+  - Concretely (for the symmetric case `m = ⌊L/2⌋`, `L` even):
+    - layer 1: `CNOT(q_{m-1}, q_m)` — disentangles `q_m`. Single CNOT.
+    - layer 2: `CNOT(q_{m-2}, q_{m-1})` and `CNOT(q_{m+1}, q_{m+2})` if
+      we choose to disentangle right side now. **OR** the cleaner
+      formulation below.
+
+The cleanest reverse is **outward-from-middle, alternating**:
+1. Disentangle `q_m`: `CNOT(q_{m-1}, q_m)`.
+2. Disentangle `q_{m-1}` and `q_{m+1}` in parallel: `CNOT(q_{m-2}, q_{m-1})`
+   and `CNOT(q_{m+2}, q_{m+1})`.
+3. Disentangle `q_{m-2}` and `q_{m+2}` in parallel: `CNOT(q_{m-3}, q_{m-2})`
+   and `CNOT(q_{m+3}, q_{m+2})`.
+4. Continue until the only GHZ-active qubits left are `q_0` and `q_L`.
+
+At each step, the control of the CNOT is one site further from the
+boundary than the target, and that control is still in the active GHZ
+(by induction). The target therefore receives the GHZ value of its
+neighbour and XORs against itself, which gives `0` (because both are
+equal in the GHZ branch).
+
+Reverse sweep depth: `max(m, L-m)`.
+
+**Total depth (asymptotic):** `2 · ⌈L/2⌉ + 2 = L + 2`.
+
+**Total CNOT count:** `L` forward + `(L - 1)` reverse = `2L - 1`.
+
+## Special cases
+- `L = 1`: top leg `(q_0, q_1)`. `m = 0`. Just `H(q_0); CNOT(q_0, q_1)`.
+  No reverse sweep needed.
+- `L = 0` (degenerate, `e_0 = e_1`): not in scope.
+- `L = 2`: `m = 1`. Forward: `H(q_1); CNOT(q_1, q_0)`, then
+  `CNOT(q_1, q_2)`. GHZ_3. Reverse: `CNOT(q_0, q_1)`. q_1 = 0; (q_0, q_2) = `|Φ⁺⟩`.
+
+## Stabiliser-formalism proof sketch
+
+After Phase B, top leg is in GHZ_{L+1} with stabilisers
+`{X_0 X_1 ... X_L, Z_i Z_{i+1} : i = 0..L-1}`.
+
+We want the target stabilisers `{X_0 X_L, Z_0 Z_L, Z_1, Z_2, ..., Z_{L-1}}`
+(i.e. `|Φ⁺⟩` on `(e_0, e_L)` ⊗ `|0⟩^{L-1}` on intermediates).
+
+Each CNOT(`c`, `t`) in Phase C transforms the Pauli operators in the
+Heisenberg picture: `X_c → X_c X_t`, `X_t → X_t`, `Z_c → Z_c`,
+`Z_t → Z_c Z_t`. Track the stabiliser group through the reverse sweep
+and verify the target group is reached.
+
+For the reverse sweep "disentangle `q_m` first, then outward
+alternating", the bookkeeping is straightforward and is presented as a
+clean inductive proof in `theory_draft.md` (Phase 1 deliverable).
 
 ---
 
 # Research Tasks
 
-## T1 — Analytical verification for the N=4 case
+## V2-T1 — Stabiliser proof
+- Derive the protocol stabiliser-by-stabiliser for `L = 4` explicitly.
+- Generalise by induction on the number of disentanglement layers.
+- Report in `theory_draft.md` (a new file replacing the v1 snapshot;
+  the v1 snapshot is in `theory_draft_v1.md`).
 
-- Using the stabiliser formalism (not brute-force statevector), explicitly track the stabiliser generators through every step of the protocol.
-- Determine which of $\{|\Phi^\pm\rangle,|\Psi^\pm\rangle\}$ the pair `(e0, e1)` lands in as a function of the four measurement outcomes $m_1, m_2, m_3, m_4 \in \{0,1\}$.
-- Derive the deterministic feed-forward correction map $(m_1,m_2,m_3,m_4) \mapsto (X^a Z^b)_\text{e0} \otimes (X^c Z^d)_\text{e1}$ that lands the pair in $|\Phi^+\rangle$ for every outcome.
-- Pin down **exactly which gate sequence** implements step 2 ("entangle (1,2), (3,4)") — the prompt is ambiguous. Likely choice: `CNOT(1,2); CNOT(3,4); H(1); H(3)` followed by Z-basis measurement, which is the standard Bell-basis measurement on each pair. State this clearly.
+## V2-T2 — Connectivity audit
+- Confirm every gate uses only top-leg edges — bottom-leg and rung
+  qubits are untouched in this protocol.
+- The `validate_connectivity` helper in `./analysis/` already covers
+  this; reuse it.
 
-## T2 — Generalisation to arbitrary L (the hard research problem)
+## V2-T3 — Engineering
+- Implement `mocu.py` (or `unitary_chain.py`) under `./analysis/`
+  with `build_circuit(L) -> QuantumCircuit`. **Do not modify**
+  existing files; add a new module.
+- Add unit tests under `./analysis/tests/test_mocu.py`:
+  - Connectivity check for `L = 1..10`.
+  - Exact Bell-fidelity = 1 via stim Clifford simulation for `L = 1..10`
+    and spot checks at `L = 20, 30, 50`.
+  - Statevector cross-check for `L = 1..6`.
+- Register the new protocol in `scaling_benchmark.PROTOCOLS` so the
+  noise + scaling sweeps include it automatically.
 
-- For **`N` even** (`L` odd): the proposition generalises directly — prepare Bell pairs on `(e0, u_1), (u_2, u_3), …, (u_{N-2}, u_{N-1}), (u_N, e1)` and Bell-measure the `N/2` inner pairs `(u_1,u_2), (u_3,u_4), …, (u_{N-1},u_N)`. Prove correctness by induction on the number of swap links.
-- For **`N` odd** (`L` even): the simple top-leg chain breaks the pairing. Find a fix. Candidate strategies:
-  - (a) Use one bottom-leg qubit via a rung to "absorb" the parity mismatch.
-  - (b) Prepare a 3-qubit GHZ link instead of a Bell pair at one spot in the chain and teleport through it.
-  - (c) Use a **different topology** entirely, e.g. route through the bottom leg for a segment.
-- Compare these fixes on depth, gate count, and classical-communication overhead.
-- For **`N = 0`** (`L = 1`, `e0` directly adjacent to `e1`): trivial — one `H + CNOT`. Include as base case.
+## V2-T4 — Comparison and write-up
+- Re-run `simulation.log` with the four-protocol set extended to five.
+- Add an appendix section to `./report/main.tex` documenting the new
+  protocol, its stabiliser proof, and the updated benchmark figures.
+- Update `./submission/research_process.md` to reflect the v2 addition
+  if (and only if) the user later asks for a re-submission. For now,
+  leave `submission/` untouched.
 
-## T3 — Circuit depth and resource analysis
-
-- **Depth (with mid-circuit measurement + classical feed-forward):** show the protocol is `O(1)` in depth — all Bell pairs can be prepared in parallel, all Bell measurements can be performed in parallel, feed-forward corrections are single-qubit. This is the **key selling point** vs a SWAP chain.
-- **Depth (unitary-only, post-selected):** if we defer all measurements to the end, depth is still `O(1)` but success probability drops as $4^{-N/2}$.
-- **Depth (unitary-only, non-post-selected):** convert Bell measurements into coherent unitary corrections controlled on the intermediate qubits — gives a direct `O(L)` depth circuit; compare with SWAP-chain `O(L)`.
-- **Gate count:** for each variant, tabulate total 1Q and 2Q gates as a function of `L`.
-- **Measurement count:** `N = L-1` mid-circuit measurements + `2 × number_of_measurements` bits of classical feed-forward.
-
-## T4 — Baseline protocols to compete against (so we know our solution is non-trivial)
-
-Implement and benchmark all of the following in simulation:
-
-1. **SWAP-chain:** prepare Bell pair on `(e0, 1)`, then SWAP `1↔2, 2↔3, …, (N-1)↔N, N↔e1`. Depth `O(L)`, no measurements.
-2. **Direct unitary creation:** `H(e0)` then a chain of CNOTs `e0→1, 1→2, …, N→e1` (a cat / GHZ-like state on the whole chain), then disentangle the middle via further CNOTs. This is the "brute-force" answer.
-3. **Our entanglement-swapping protocol** (the main contribution): depth `O(1)` with feed-forward.
-4. **Measurement-based ladder variant** (optional, stretch goal): use the bottom-leg ancillas to prepare a cluster state on the ladder and teleport `e0` to `e1` through it. Might give a cleaner circuit for `N` odd.
-
-## T5 — Python simulation (under `./analysis/`, managed with `uv`)
-
-- `uv init` under `./analysis/`. Add deps: `qiskit` (primary), `numpy`, `scipy`, `matplotlib`. Optional: `stim` for fast stabiliser simulation of our protocol.
-- Resource block at the top of every entry script (16 GB mem cap, 4 BLAS threads) — see Engineer persona.
-- Implement each protocol (T4 items 1–4) as a function `build_circuit(L) -> QuantumCircuit`.
-- **Verification routine:** for every `L` from 1 to 10 (and at least one spot-check at `L=50` via stabiliser simulation), confirm that after applying the circuit + feed-forward corrections, the reduced density matrix on `(e0, e1)` has fidelity $>1-10^{-9}$ with the declared target Bell state. Average over all $2^N$ measurement outcome branches.
-- Verify on both Qiskit's `AerSimulator` (shot-based) and `Statevector` (exact, for small `L`).
-- Export circuit diagrams (`qc.draw("mpl")`) under `./analysis/figures/`.
-- Log a full sweep to `./analysis/simulation.log`.
-
-## T6 — Final Bell state identification
-
-- State clearly in the report which Bell state the protocol targets (expected: $|\Phi^+\rangle$ after Pauli corrections, but verify).
-- Show the explicit derivation of the outcome-to-correction map from T1.
-
-## T7 — Robustness sanity-checks (stretch)
-
-- How does the protocol perform under a depolarising noise channel on each gate (`p ∈ {10^{-3}, 10^{-2}}`)? Does the `O(1)` depth advantage translate into higher fidelity than the SWAP-chain baseline at realistic noise levels? This is probably the strongest "Innovation Award" angle.
+## V2-T5 — Final review
+- Three-reviewer audit (Math Pedant, Performance Hacker, Domain Expert)
+  of the new protocol, theorem, code, and tests. Output to
+  `final_review.md` (replacing v1; v1 snapshot retained in
+  `final_review_v1.md`).
 
 ---
 
-# Directory Layout (overrides CLAUDE.md default `./src/`)
+# Workflow Cycle
 
-Because the user specified `analysis/` for Python work, the per-run layout is:
+Standard 5-phase company workflow. Follow `../../personas/*.md`.
 
-```
-runs/ephys-challenge-2026/
-  prompt.txt                       (source proposition)
-  instruction.md                   (this file)
-  2026_challenge_markdown/         (challenge statement, Chinese + English)
-  theory_draft.md                  (Phase 1, Researcher)
-  ra_critique.md                   (Phase 2, RA Skeptic)
-  report/
-    main.tex                       (Phase 3, LaTeX Writer)
-    main.pdf
-    figures/                       (circuit diagrams, depth/fidelity plots)
-  analysis/                        (Phase 4, Python Engineer — replaces ./src/)
-    pyproject.toml                 (uv-managed)
-    uv.lock
-    swap_chain.py
-    cat_chain.py
-    entanglement_swap.py           (our protocol)
-    cluster_ladder.py              (stretch)
-    verification.py                (fidelity checks, outcome-averaging)
-    scaling_benchmark.py           (depth / gate count vs L)
-    tests/
-      test_small_L.py
-      test_stabiliser_consistency.py
-      test_feedforward.py
-    figures/
-    simulation.log
-  final_review.md                  (Phase 5, Review Board)
-  submission/                      (the competition-ready bundle)
-    submission.pdf                 (copy of report/main.pdf + cover)
-    circuit_diagram.pdf
-    code_bundle.zip
-    research_process.md            (required by competition rules §3)
-```
-
----
-
-# Deliverables (per CLAUDE.md workflow, adapted for competition)
-
-## Phase 1 — Researcher → `./theory_draft.md`
-- Brief literature note on entanglement swapping (Żukowski–Zeilinger 1993, quantum repeater literature — Briegel–Dür–Cirac–Zoller 1998 — and measurement-based quantum computing on cluster states). arXiv MCP search required.
-- Formal definition of the ladder graph, connectivity, and notation.
-- Full stabiliser-formalism derivation for T1.
-- Inductive generalisation for T2 (even case) and at least one candidate fix for the odd case.
-- Depth / gate-count analysis from T3.
-- Positioning: why is this more interesting than SWAP-chain or GHZ disentangle?
-
-## Phase 2 — RA Skeptic → `./ra_critique.md`
-- Independent literature check (NCCU is a Taiwan institution; this is a student-level open challenge — check if entanglement swapping solutions have been proposed for ladder QPUs previously in e.g. IBM / Quantinuum architecture papers).
-- Pedantic review of the stabiliser derivation — are all signs correct, all Pauli corrections consistent?
-- Check the odd-`N` fix works; call out if T2 has gaps.
-- Check that **every** two-qubit gate in every protocol uses only listed edges — connectivity violations would disqualify us.
-- Loop with Phase 1 until approval.
-
-## Phase 3 — LaTeX Writer → `./report/main.tex`
-- XeLaTeX, `revtex4-2` or `article` with physics preamble.
-- Fig. 1 reproduction of the ladder, Fig. 2 circuit diagram, Fig. 3 depth/fidelity plots.
-- Must satisfy competition rule §3 required items: circuit diagram + explanation, declared Bell state, verification method, code description, research-process description.
-
-## Phase 4 — Python Engineer → `./analysis/`
-- `uv init` the project. Pinned Python 3.11+.
-- Implement all four protocols from T4, run the verification sweep from T5.
-- Unit tests in `./analysis/tests/`. Golden tests: Bell fidelity > 1 − 10⁻⁹ averaged over outcomes for `L ∈ {1, …, 10}`.
-- Pipe full run to `./analysis/simulation.log`.
-
-## Phase 5 — Review Board → `./final_review.md`
-- Math pedant: stabiliser derivation correctness.
-- Performance hacker: code cleanliness, vectorisation, correctness of feed-forward logic.
-- Domain expert: does the submitted package satisfy every line-item in competition rule §3?
-- Produce the final `submission/` bundle ready for upload to the registration URL.
+1. **Phase 1 (Researcher)** → `./theory_draft.md`. Stabiliser proof of
+   the MOCU protocol for arbitrary `L`. Compare gate count, depth,
+   measurement count vs v1, swap_chain, cat_chain.
+2. **Phase 2 (RA Skeptic)** → `./ra_critique.md`. Pedantic check of
+   stabiliser propagation. Loop with Phase 1 until approval.
+3. **Phase 3 (LaTeX Writer)** → append a new section to
+   `./report/main.tex` ("§ A. Measurement-Free Variant — MOCU").
+   Recompile `./report/main.pdf`.
+4. **Phase 4 (Python Engineer)** → `./analysis/mocu.py` +
+   `./analysis/tests/test_mocu.py` + register protocol in
+   `scaling_benchmark.py`. Re-run `main.py`, log to
+   `./analysis/simulation.log`.
+5. **Phase 5 (Review Board)** → `./final_review.md`.
 
 ---
 
 # Practical Constraints
 
-- **Language / tooling:** Python 3.11+, Qiskit 1.x or 2.x (state at run time), managed by `uv`. No conda, no pip-install-requirements.
-- **Memory:** 16 GB cap; 4 BLAS threads. Enforced by the standard resource block.
-- **Reproducibility:** log git commit, `qiskit.__version__`, seed all RNGs.
-- **Connectivity hygiene:** every 2Q gate must be checked against the allowed edge list before any simulation — write a `validate_connectivity(qc, edges)` helper and call it on every constructed circuit.
-- **Competition hygiene:** §3 of the rules says "if AI tools are used, they should be explicitly listed, and the scope of use explained." The `research_process.md` in `submission/` must declare Claude Code's role honestly.
-- **Scope discipline:** do NOT attempt to solve this on a real IBM / Quantinuum device — simulation only, unless a free-tier backend is available and noise benchmarking (T7) specifically calls for it.
+- **Do not break v1.** The v1 submission bundle in `./submission/` is
+  competition-ready and should remain bit-identical unless the user
+  explicitly asks for a re-submission.
+- **Additive code only.** Do not modify existing modules
+  (`entanglement_swap.py`, `swap_chain.py`, `cat_chain.py`, etc.) or
+  existing tests. Add new files alongside.
+- **Reuse infrastructure.** `validate_connectivity`, `verification.py`,
+  `stim_verification.py`, `resource_limits.py` should all work for the
+  new protocol with no changes — register a new entry in the
+  `PROTOCOLS` list and existing harnesses pick it up.
+- **Clifford-only.** The MOCU protocol uses only `H` and `CNOT`, so
+  stim simulation is exact and fast for any `L`.
 
 ---
 
 # Success Criteria
 
-The run is a competition-ready success if by end of Phase 5:
+The v2 run is complete if:
 
-1. The entanglement-swapping protocol is proven (both stabiliser-analytically and numerically) to produce a named Bell state on `(e0, e1)` for `L ∈ {1, …, 10}` with fidelity > 1 − 10⁻⁹.
-2. A correctness argument covers **all `L ≥ 1`**, including odd `N`.
-3. Depth, gate count, and measurement count are tabulated vs `L` and compared against the SWAP-chain and cat-chain baselines.
-4. The `submission/` directory is complete and satisfies every bullet under competition rule §3.
-5. An "Innovation Award" angle is explicitly highlighted in the report — either the `O(1)` depth advantage under feed-forward, the noise-fidelity comparison (T7), or the cluster-state variant (T4 stretch).
+1. The MOCU protocol is proven stabiliser-correct for arbitrary `L`.
+2. `test_mocu.py` passes for `L = 1..10` with Bell-fidelity = 1
+   (machine precision via stim).
+3. The new protocol is benchmarked side-by-side with the four existing
+   baselines for depth, 2Q-gate count, and noise-fidelity at
+   `p_2 = 10^{-2}` for `L = 1..10`.
+4. `./report/main.pdf` includes the new appendix section.
+5. `final_review.md` documents PASS from all three reviewers.
 
-A valid partial outcome (still worth submitting) is if the odd-`N` fix turns out to cost extra depth — we report the honest tradeoff.
+A valid partial outcome is if numerical noise robustness turns out to
+be worse than measurement-based protocols — we report the honest
+trade-off (Lieb-Robinson depth bound is the price of unitarity).
