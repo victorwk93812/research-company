@@ -135,6 +135,7 @@ docker compose run --rm research
 docker run --rm -it \
   -v "$PWD":/workspace:z \
   -v "$HOME/.claude":/root/.claude:z \
+  -v "$HOME/.claude.json":/root/.claude.json:z \
   -w /workspace \
   research-company:latest
 
@@ -142,17 +143,19 @@ docker run --rm -it \
 podman run --rm -it \
   -v "$PWD":/workspace:z \
   -v "$HOME/.claude":/root/.claude:z \
+  -v "$HOME/.claude.json":/root/.claude.json:z \
   -w /workspace \
   research-company:latest
 ```
 
-The two bind mounts are the important part:
+The three bind mounts are the important part:
 - `$PWD → /workspace` makes this repository visible inside the container.
-- `$HOME/.claude → /root/.claude` forwards your Claude Code auth (and any settings / MCP registrations) into the container.
+- `$HOME/.claude → /root/.claude` forwards your Claude Code OAuth credentials, settings, and MCP registrations into the container.
+- `$HOME/.claude.json → /root/.claude.json` forwards your Claude Code account state. Without this mount the container will run the first-run "API key / subscription plan" setup wizard even though `.credentials.json` is present, because Claude Code reads `~/.claude.json` to decide whether the account is already set up.
 
 The `:z` suffix on each mount tells the runtime to relabel the source for SELinux so the container can actually read/write it. On SELinux-enforcing hosts (RHEL, Fedora, Rocky, Alma, CentOS Stream) this is what prevents `ls: Permission denied` errors. On non-SELinux hosts it's a harmless no-op, so leave it on.
 
-> If you also want the host's `~/.claude.json` visible inside the container (e.g. to inherit host-scope MCP registrations), add `-v "$HOME/.claude.json":/root/.claude.json:z` to the command — **but** run `touch ~/.claude.json` on the host first, or the daemon will create it as a directory and Claude Code will fail to start.
+> **Prereq for the third mount:** `~/.claude.json` must exist on the host as a regular file. If you've ever completed the Claude Code login flow on the host (Step 2), it already does — verify with `ls -la ~/.claude.json`. If it's missing, run `touch ~/.claude.json` before launching the container, or the runtime will create it as a directory and Claude Code will fail to start.
 
 You should land in an interactive shell at `/workspace`. Verify that the toolchain is present:
 
@@ -294,9 +297,11 @@ Bind mounts cross the host/container boundary, so UID mapping matters:
 - **Podman rootless** maps your host UID to `root` inside the container automatically. Files created during the run appear on the host owned by you. No action required.
 - **Docker** runs as real root by default, so files the container creates will be owned by `root` on the host. Either pass `-u "$(id -u):$(id -g)"` at run time, or run `sudo chown -R "$USER" runs/` after the run.
 
-## Optional: sharing `~/.claude.json` with the container
+## Note on `~/.claude.json`
 
-`~/.claude/` (mounted by default) holds auth, settings, and MCP registrations. `~/.claude.json` is a separate host file that holds some global Claude Code config. If you want to share it with the container too, uncomment the relevant line in `docker-compose.yml` — **but first** run `touch ~/.claude.json` on the host. Otherwise the daemon will create it as a directory and Claude Code will fail to start.
+`~/.claude/` (the directory) holds OAuth credentials, settings, and MCP registrations. `~/.claude.json` (a separate file at `$HOME/.claude.json`) holds account-setup state and global Claude Code config. **Both are required** in the container, and both are mounted by default in `docker-compose.yml` and in the plain `docker run` / `podman run` examples in Step 4.
+
+If `~/.claude.json` is missing on the host, the runtime will create it as a directory at the bind-mount target and Claude Code will fail to start. Completing the host login flow (Step 2) creates the file. If for some reason it's still missing, run `touch ~/.claude.json` before bringing the container up.
 
 ## SELinux note
 

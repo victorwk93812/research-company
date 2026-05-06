@@ -3,8 +3,13 @@
 #   docker compose run --rm research
 #
 # The container bind-mounts the repo at /workspace and your host ~/.claude
-# directory at /root/.claude so Claude Code auth and MCP registrations carry
-# over from your host session.
+# directory + ~/.claude.json file at /root/ so Claude Code auth, account
+# state, and MCP registrations carry over from your host session.
+#
+# Prereq: ~/.claude.json must exist on the host as a regular file. If you've
+# ever logged in to Claude Code on the host it already does. If not, run
+# `touch ~/.claude.json` before bringing the container up — otherwise the
+# runtime will create it as a directory and Claude Code will fail to start.
 services:
   research:
     build:
@@ -25,9 +30,9 @@ services:
       - .:/workspace:z
       # Claude Code auth + per-user settings + MCP registrations live here.
       - ${HOME}/.claude:/root/.claude:z
-      # Optional: share the host's global Claude config (including host-scope
-      # MCP registrations). If you enable this line, make sure the host file
-      # actually exists first (`touch ~/.claude.json`) — otherwise Docker
-      # will create it as a directory and break Claude Code.
-      # - ${HOME}/.claude.json:/root/.claude.json:z
+      # Account state (which Claude Code reads on startup to decide whether
+      # to run the first-run setup wizard). Without this mount the container
+      # will prompt for an API key / subscription plan even though
+      # .credentials.json is present.
+      - ${HOME}/.claude.json:/root/.claude.json:z
     command: /bin/bash
