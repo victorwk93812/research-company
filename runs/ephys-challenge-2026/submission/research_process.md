@@ -20,6 +20,7 @@ advisors and no other-team code were used.
 | 2026-04-23 evening | Phase 3 (LaTeX Writer): `./report/main.tex` produced with XeLaTeX, circuit diagram, resource-scaling table, references. |
 | 2026-04-23 evening | Phase 4 (Python Engineer): `uv`-managed project under `./analysis/` with Qiskit 2.4 / stim 1.15 / numpy / matplotlib. Dynamic-circuit implementations of four protocols (our entanglement-swapping, SWAP-chain, cat-chain disentangle, 1D cluster-ladder). Branch-by-branch fidelity verification for `L = 1..10` (all protocols pass with fidelity `= 1` to machine precision via `stim` Clifford simulation). Large-`L` spot checks at `L = 20, 30, 50` also pass. Noise benchmark with `p_2 = 10^{-2}` depolarising channel confirms our protocol's advantage over SWAP-chain (`0.93` vs `0.82` at `L = 10`). Output: `./analysis/simulation.log` and `./analysis/figures/*.pdf`. |
 | 2026-04-23 late evening | Phase 5 (Review Board): mathematical audit, code review, competition-rule compliance audit. Submission bundle assembled. Output: `./final_review.md` and `./submission/*`. |
+| 2026-05-06 | v2 cycle: a measurement-free Middle-Out Cat-Uncompute (MOCU) protocol added as Appendix A of the report. Same five-phase persona cycle re-run from `./instruction.md` (the v1 instruction is preserved as `./instruction_v1.md`). Outputs added: `./theory_draft.md`, `./ra_critique.md`, `./report/main.tex` (Appendix A), `./analysis/mocu.py`, `./analysis/tests/test_mocu.py`, `./final_review.md`. v1 artifacts preserved as `*_v1.md`. The submission bundle was rebuilt from these updated artifacts. |
 
 ## Problem-solving process
 
@@ -30,14 +31,15 @@ advisors and no other-team code were used.
 5. **Numerical verification.** `stim` simulates the Clifford circuit exactly; all `2^N` branches (`N` up to 9, i.e. `L = 10`) pass with fidelity 1. Independent `Statevector`-based verification cross-checks the small-`L` cases.
 6. **Benchmarking.** Scaling and noise-model comparisons against SWAP-chain, cat-disentangle, and cluster-ladder baselines confirm our `O(1)`-depth advantage.
 7. **Writing and review.** The LaTeX report, simulation log, and submission bundle were assembled in Phase 5.
+8. **v2 — Measurement-free variant (MOCU).** As a hardware-universal companion protocol (Appendix A), we added the Middle-Out Cat-Uncompute scheme: an `H` on the middle top-leg qubit followed by a balanced forward CNOT cascade builds GHZ over the top leg in depth `⌈L/2⌉ + 2`, then a centre-out reverse cascade disentangles intermediate qubits in depth `≈⌈L/2⌉`, leaving `|Φ^+⟩` between `e_0` and `e_1`. Total: depth `L + 2`, `2L − 1` two-qubit gates, **zero measurements**. Stabiliser-formalism proof of correctness, plus 49 new tests with stim-exact fidelity = 1 for `L = 1..10` and spot checks at `L = 20, 30, 50`. Honest noise comparison: at `p_2 = 10^{-2}`, MOCU achieves `F = 0.885` at `L = 10` — between `cat_chain` (`0.928`) and `swap_chain` (`0.816`). The v1 measurement-based protocol (`F = 0.928`) remains the depth-best choice on dynamic-circuit hardware; MOCU is the depth-best choice on hardware without mid-circuit measurement / feed-forward.
 
 ## AI tool use declaration
 
 - **Tool:** Anthropic's Claude Code (LLM-based coding agent, Opus 4.7, 2026).
-- **Scope:** used continuously throughout all five research phases. Role-separated into Researcher / RA Skeptic / LaTeX Writer / Python Engineer / Review Board personas defined in `../personas/*.md`.
+- **Scope:** used continuously throughout all five research phases of both v1 (entanglement-swap protocol) and v2 (MOCU appendix) cycles. Role-separated into Researcher / RA Skeptic / LaTeX Writer / Python Engineer / Review Board personas defined in `../personas/*.md`.
 - **What the AI did:** drafted all written content, including the theoretical derivation and the LaTeX manuscript; produced the Python code; ran and logged the verification simulations; produced the submission bundle.
 - **What the AI did not do:** invent new physics. Every stabiliser derivation was independently re-derived by at least two personas (Researcher + RA Skeptic), and every mathematical claim is cross-checked by the stim-based exact simulator.
-- **Independent verification of AI output:** all claims in `./report/main.tex` are numerically backed by `./analysis/simulation.log` and the 83 automated tests in `./analysis/tests/` (all passing).
+- **Independent verification of AI output:** all claims in `./report/main.tex` are numerically backed by `./analysis/simulation.log` and the **132 automated tests** in `./analysis/tests/` (83 from v1 + 49 from the MOCU v2 cycle, all passing).
 
 ## Third-party tools / libraries
 
