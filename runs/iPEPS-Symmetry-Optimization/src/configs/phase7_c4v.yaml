@@ -1,0 +1,38 @@
+grid_label: phase7_c4v
+budget_minutes: 90
+num_steps_default: 8
+chi_default: 16
+D_default: 2
+
+# Note on num_steps_default=8 (down from 12 originally):
+# At chi=16 + L-BFGS, num_steps=12 OOMs the 16 GB cap due to L-BFGS
+# state allocation + JIT cache cumulative footprint.  num_steps=8 fits
+# comfortably (~30s/cell on 4 BLAS threads) and the chi-extrap signal
+# is sharp by then.
+
+# Phase-7 corrected harness:
+#   - gs_c4v=True for ALL cells (per tenax issue #328 — the 2-site
+#     no-c4v path is non-variational at finite chi, especially chi<16).
+#   - chi=16 is the smallest tenax-safe chi for the implicit-AD CTM
+#     backward; smaller chi reliably finds energies BELOW the QMC
+#     variational floor on Heisenberg.
+#   - chi_extrap=[8, 16, 24] re-evaluates E_CTM at three chi values on
+#     the converged variational tensor; monotone-increasing E vs chi
+#     is the convergence signature.
+#   - Adam dropped to keep the budget tight; L-BFGS only.
+#   - 2 seeds per cell; ~16 cells total.
+
+cells:
+  # ---------- Heisenberg (RQ1 / RQ4) — primary variational sanity ----------
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  # ---------- J1-J2 at J2/J1 = 0.0 (Néel point) ----------
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  # ---------- J1-J2 at J2/J1 = 0.5 (frustrated, RQ2/RQ5 headline) ----------
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true,  gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true,  gs_c4v: true, chi_extrap: [8, 16, 24], seeds: [0, 1]}

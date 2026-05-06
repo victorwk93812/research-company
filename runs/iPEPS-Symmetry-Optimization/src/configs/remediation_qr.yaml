@@ -1,0 +1,12 @@
+grid_label: small_magnitude_remediation
+budget_minutes: 6
+num_steps_default: 6
+chi_default: 8
+D_default: 2
+
+# Re-run only the cells that timed out at 75s. We give them a 220-second
+# per-cell budget so the JIT cache miss path completes.
+cells:
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [1, 2]}
+  - {model: j1j2,       h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [1]}
+  - {model: j1j2,       h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}

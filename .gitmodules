@@ -1,0 +1,3 @@
+[submodule "runs/iPEPS-Symmetry-Optimization/tenax"]
+	path = runs/iPEPS-Symmetry-Optimization/tenax
+	url = https://github.com/tenax-lab/tenax

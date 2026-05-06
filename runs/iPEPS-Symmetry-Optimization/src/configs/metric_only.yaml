@@ -1,0 +1,13 @@
+grid_label: small_magnitude_metric
+budget_minutes: 6
+num_steps_default: 6
+chi_default: 8
+D_default: 2
+
+cells:
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true,  seeds: [0]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true,  seeds: [0]}
+  - {model: j1j2,       h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true,  seeds: [0]}
+  - {model: j1j2,       h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true,  seeds: [0]}
+  # also retry j1j2(0.5) seed 0 plain QR (it timed out at 75s last time)
+  - {model: j1j2,       h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0]}

@@ -1,0 +1,34 @@
+grid_label: small_magnitude
+budget_minutes: 15
+num_steps_default: 6
+chi_default: 8
+D_default: 2
+
+cells:
+  # ---------- TFIM (2-site) — sanity ladder for SVD baseline only.
+  # qr_canonical is currently restricted to non-TFIM cells: see Phase 5 review.
+  - {model: tfim, h_or_J2: 2.5,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.04, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0]}
+  - {model: tfim, h_or_J2: 3.5,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0]}
+
+  # ---------- Heisenberg 2-site — RQ1 (correctness) + RQ4 (optimiser axis) ----------
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: adam,  metric_precond: false, seeds: [0]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: adam,  metric_precond: false, seeds: [0]}
+
+  # ---------- J1-J2 at J2/J1 = 0.0 (Néel point, no frustration) ----------
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+
+  # ---------- J1-J2 at J2/J1 = 0.5 (frustrated, the headline RQ2 cell) ----------
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+
+  # ---------- 2x2 design (RQ5): SVD/QR x plain/metric-LBFGS at J1J2(0.5) ----------
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true,  seeds: [0]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true,  seeds: [0]}
+
+  # Metric study on Heisenberg (RQ5 cross-check)
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true, seeds: [0]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true, seeds: [0]}

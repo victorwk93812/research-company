@@ -1,0 +1,44 @@
+grid_label: larger_tests
+budget_minutes: 90
+num_steps_default: 12
+chi_default: 12
+D_default: 2
+
+# Phase-6 escalation grid.
+# - D=2 chi=12 and chi=16 to probe χ-scaling
+# - num_steps 12 (vs 6 in small-magnitude) to populate the RQ2 variance metric
+# - 3 seeds wherever the per-cell budget allows
+# - The Phase-6 agent will also try a "qr_canonical_strong_eps" experimental
+#   variant that uses a larger Lorentzian eps to test the J1-J2 std::bad_alloc
+#   diagnosis from the small-magnitude run. (Implementation handled by
+#   the agent at run time via a runtime override of _LORENTZ_EPS_REL.)
+
+cells:
+  # ---------- TFIM SVD baseline at chi=12 (sanity ladder) ----------
+  - {model: tfim, h_or_J2: 2.5,  ctmrg_mode: svd, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.04, ctmrg_mode: svd, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.5,  ctmrg_mode: svd, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+
+  # ---------- Heisenberg at chi=12 ----------
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: adam,  metric_precond: false, seeds: [0]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: adam,  metric_precond: false, seeds: [0]}
+
+  # ---------- J1-J2 sweep at chi=12 (RQ2 main result) ----------
+  - {model: j1j2, h_or_J2: 0.0,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: j1j2, h_or_J2: 0.0,  ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: j1j2, h_or_J2: 0.4,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.4,  ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: j1j2, h_or_J2: 0.5,  ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1, 2]}
+  - {model: j1j2, h_or_J2: 0.55, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.55, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.6,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.6,  ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, seeds: [0, 1]}
+
+  # ---------- Metric-preconditioned LBFGS, J1-J2 main 2x2 RQ5 ----------
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true,  seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true,  seeds: [0, 1]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true, seeds: [0, 1]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true, seeds: [0, 1]}

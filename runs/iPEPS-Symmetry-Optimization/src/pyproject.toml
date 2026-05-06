@@ -1,0 +1,15 @@
+[project]
+name = "src"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "jax>=0.10.0",
+    "matplotlib>=3.10.9",
+    "networkx>=3.6.1",
+    "numpy>=1.26",
+    "opt-einsum>=3.4.0",
+    "optax>=0.2.8",
+    "pyyaml>=6.0.3",
+    "scipy>=1.11",
+]

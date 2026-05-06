@@ -1,0 +1,17 @@
+\begin{tabular}{l c l l c c c r r}
+\toprule
+model & $h$ or $J_2/J_1$ & ctmrg mode & optimiser & metric & seeds & $E$ (mean$\pm$std) & wall (s) & steps \\
+\midrule
+heisenberg & 0.00 & qr\_canonical & adam & -- & 1 & $-1.3306 \pm 0.0000$ & 51.6 & 12 \\
+heisenberg & 0.00 & svd & adam & -- & 1 & $-0.9365 \pm 0.0000$ & 19.4 & 12 \\
+heisenberg & 0.00 & svd & lbfgs & -- & 1 & $-0.8323 \pm 0.0000$ & 49.4 & 12 \\
+j1j2 & 0.00 & svd & lbfgs & -- & 1 & $-0.8323 \pm 0.0000$ & 35.3 & 12 \\
+j1j2 & 0.40 & svd & lbfgs & -- & 1 & $-0.9988 \pm 0.0000$ & 41.4 & 12 \\
+j1j2 & 0.50 & svd & lbfgs & -- & 1 & $-1.0404 \pm 0.0000$ & 41.5 & 12 \\
+j1j2 & 0.55 & svd & lbfgs & -- & 1 & $-1.0612 \pm 0.0000$ & 42.4 & 12 \\
+j1j2 & 0.60 & svd & lbfgs & -- & 1 & $-1.0820 \pm 0.0000$ & 41.3 & 12 \\
+tfim & 2.50 & svd & lbfgs & -- & 2 & $-2.7701 \pm 0.0093$ & 26.1 & 12 \\
+tfim & 3.04 & svd & lbfgs & -- & 2 & $-3.1478 \pm 0.0059$ & 23.4 & 12 \\
+tfim & 3.50 & svd & lbfgs & -- & 2 & $-3.5228 \pm 0.0009$ & 25.2 & 12 \\
+\bottomrule
+\end{tabular}
