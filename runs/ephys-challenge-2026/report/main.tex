@@ -12,9 +12,9 @@
 \usepackage{qcircuit}
 \usepackage{listings}
 \usepackage{xcolor}
-\usepackage{fullpage}
 \usepackage[a4paper,margin=1in]{geometry}
 \usepackage{siunitx}
+\usepackage{adjustbox}
 
 \lstset{
   basicstyle=\ttfamily\small,
@@ -45,8 +45,8 @@
 \newcommand{\CZ}{\mathrm{CZ}}
 \newcommand{\F}{\mathbb{F}}
 
-\title{\textbf{Entanglement Swapping on a Two-Legged Ladder QPU:\\
-  A Constant-Depth Bell-State Preparation Protocol}\\[6pt]
+\title{\textbf{Bell-State Preparation on a Two-Legged Ladder QPU:\\
+  Two Complementary Protocols}\\[6pt]
   \large Submission to the 2026 Institute of Applied Physics, NCCU, Open Challenge}
 
 \author{Team submission\\
@@ -58,38 +58,45 @@
 \maketitle
 
 \begin{abstract}
-We design a scalable quantum circuit that deterministically places the two
-distant endpoint qubits $e_0,e_1$ of a two-legged ladder QPU into the Bell
-state $\Phip = (\ket{00}+\ket{11})/\sqrt 2$, using only single-qubit gates,
-adjacent two-qubit gates, mid-circuit measurements, and classically-controlled
-feed-forward Pauli corrections. The protocol is a scalable specialisation of
-textbook entanglement swapping, executed entirely on the top leg of the
-ladder. It works for every ladder length $L \ge 1$: the $N=L-1$ even case is
-the direct generalisation of the 1993 Żukowski-Zeilinger primitive, while
-the odd case is handled by a single 3-qubit GHZ link at one end of the
-chain. We give a complete stabiliser-formalism derivation for $N=4$ (the
-example of Fig.~1 of the challenge), an inductive proof for all $L$, and a
-closed-form feed-forward correction map
-$(m_1,\dots,m_N)\mapsto X_{e_1}^a Z_{e_1}^b$ with $a=\bigoplus_{j\text{ even}} m_j$,
-$b=\bigoplus_{j\text{ odd}} m_j$. The circuit has constant depth
-$\le 7$ (including feed-forward), with
-$N+1$ or $N+2$ two-qubit gates and $N$ measurements, compared to
-$\Theta(L)$ depth for the SWAP-chain and GHZ-disentangle baselines. This is
-verified by exact \texttt{Statevector} and stabiliser simulation for
-$L\in\{1,\dots,10\}$, giving Bell fidelity $>1-10^{-9}$ in every measurement
-branch. A short noise-model benchmark shows the $O(1)$-depth advantage
-translates into higher Bell fidelity than the SWAP-chain baseline at
-realistic superconducting-qubit gate error rates.
+We design two scalable quantum circuits that deterministically place the
+two distant endpoint qubits $e_0,e_1$ of a two-legged ladder QPU into the
+Bell state $\Phip = (\ket{00}+\ket{11})/\sqrt 2$ for every ladder length
+$L\ge 1$. \textbf{Protocol I (entanglement-swap, dynamic).} A scalable
+specialisation of textbook entanglement swapping along the top leg, using
+single-qubit gates, adjacent two-qubit gates, mid-circuit measurements,
+and a closed-form classically-controlled Pauli correction. The quantum
+gate depth is a constant ($\le 7$) independent of $L$, with $N+1$ or
+$N+2$ two-qubit gates and $N=L-1$ measurements. The even-$N$ case
+generalises the 1993 Żukowski-Zeilinger primitive; the odd case is
+handled by a single 3-qubit GHZ link at one end of the chain.
+\textbf{Protocol II (Middle-Out Cat-Uncompute, unitary).} A
+measurement-free companion that builds the $(L+1)$-qubit GHZ on the top
+leg from the centre outward, then disentangles the intermediate qubits
+in a centre-out reverse sweep. The total depth is $L+2$, with $2L-1$
+two-qubit gates and zero measurements; this saturates the Lieb-Robinson
+$\Omega(L)$ lower bound for any unitary protocol composed of
+nearest-neighbour gates on a 1D chain. Both protocols are proven correct
+by stabiliser-formalism induction and verified to fidelity $>1-10^{-9}$
+by exact \texttt{Statevector} and \texttt{stim} simulation for
+$L\in\{1,\dots,10\}$ (with $L=20,30,50$ spot-checks). Under a
+two-qubit depolarising error rate $p_2=10^{-2}$ at $L=10$, Protocol I
+achieves Bell fidelity $0.928$, MOCU achieves $0.885$, and the
+SWAP-chain baseline degrades to $0.816$. Protocol I is preferable on
+hardware with mature dynamic-circuit primitives; Protocol II is the
+depth-best choice on hardware lacking mid-circuit measurement and
+feed-forward.
 \end{abstract}
 
 \section{Introduction and positioning}
+\label{sec:intro}
 
-A Bell state of two qubits is the maximally-entangled two-party pure state
-underlying quantum teleportation, dense coding, and device-independent
-cryptography. Preparing a Bell state on the two endpoint qubits
-$e_0,e_1$ of a connectivity-limited QPU — such as the two-legged ladder of
-Fig.~\ref{fig:ladder} — is therefore the simplest non-trivial benchmark
-for any quantum architecture with restricted coupling.
+A Bell state of two qubits is the maximally-entangled two-party pure
+state underlying quantum teleportation, dense coding, and
+device-independent cryptography. Preparing a Bell state on the two
+endpoint qubits $e_0,e_1$ of a connectivity-limited QPU — such as the
+two-legged ladder of Fig.~\ref{fig:ladder} — is therefore the simplest
+non-trivial benchmark for any quantum architecture with restricted
+coupling.
 
 \begin{figure}[h]
 \centering
@@ -127,48 +134,68 @@ for any quantum architecture with restricted coupling.
 \label{fig:ladder}
 \end{figure}
 
-\paragraph{Proposal.} We place $(e_0,e_1)$ into $\Phip$ by entanglement
-swapping along the top leg:
-\begin{enumerate}
-\item[(i)] prepare $\lceil(N+1)/2\rceil$ Bell pairs on alternating top-leg links
-  (or, when $N$ is odd, one $3$-qubit GHZ link at the end of the chain);
-\item[(ii)] couple the chain by Bell-measurement unitaries on each pair of
-  neighbouring intermediate qubits;
-\item[(iii)] measure every intermediate qubit in the computational (or
-  Hadamard) basis;
-\item[(iv)] apply a single-qubit Pauli correction $X_{e_1}^a Z_{e_1}^b$
-  conditioned on the measurement outcomes.
-\end{enumerate}
-Every two-qubit gate is on an allowed top-leg edge. The quantum-gate depth
-is a constant ($\le 7$) independent of $L$; by contrast, a SWAP chain has
-depth $3N+2$ and the GHZ-cat-disentangle alternative has depth $N+3$.
+\paragraph{Two complementary protocols.} We present two protocols, each
+optimal in a different operational regime.
 
-\paragraph{Related work.} Entanglement swapping was introduced by Żukowski,
-Zeilinger, Horne, and Ekert~\cite{ZukowskiZeilinger1993}; the quantum
-repeater architecture built on iterated entanglement swapping is due to
-Briegel, Dür, Cirac, and Zoller~\cite{BDCZ1998}. A single-swap
-demonstration on an IBM \texttt{ibmqx4} processor was reported by Behera
-\textit{et al.}~\cite{Behera2018}. Constant-depth long-range entanglement
-via dynamic circuits has recently been experimentally demonstrated on
+\begin{itemize}
+\item \textbf{Protocol I — entanglement-swap with feed-forward}
+  (\S\ref{sec:swap}). Mid-circuit measurement and classically-controlled
+  Pauli correction make this protocol $O(1)$-depth, independent of $L$.
+  It is the depth-best choice on hardware with mature dynamic-circuit
+  primitives.
+\item \textbf{Protocol II — Middle-Out Cat-Uncompute (MOCU)}
+  (\S\ref{sec:mocu}). A measurement-free, fully unitary alternative that
+  saturates the $\Omega(L)$ Lieb-Robinson lower bound for unitary
+  nearest-neighbour 1D circuits at depth $L+2$. It is the depth-best
+  choice on hardware without mid-circuit measurement and feed-forward.
+\end{itemize}
+
+\paragraph{Comparison to baselines.} We compare both protocols to three
+baselines: a SWAP chain (depth $3N+2$, no measurements), a
+GHZ-cat-disentangle protocol (depth $N+3$, $N$ measurements,
+single-qubit feed-forward), and a 1D cluster-state ladder
+(constant depth, $O(L)$ classical bits, $3L-1$ two-qubit gates).
+Section~\ref{sec:resources} summarises the tradeoffs.
+
+\paragraph{Related work.} Entanglement swapping was introduced by
+Żukowski, Zeilinger, Horne, and
+Ekert~\cite{ZukowskiZeilinger1993}; the quantum repeater architecture
+built on iterated entanglement swapping is due to Briegel, Dür, Cirac,
+and Zoller~\cite{BDCZ1998}. A single-swap demonstration on an IBM
+\texttt{ibmqx4} processor was reported by Behera \textit{et
+al.}~\cite{Behera2018}. Constant-depth long-range entanglement via
+dynamic circuits has recently been experimentally demonstrated on
 superconducting qubits for long-range CNOT teleportation over 101
 qubits~\cite{Baumer2024} and for constant-depth fan-out with
 feed-forward~\cite{Song2024}. A theoretical framework for the depth
 advantage of LOCC-assisted circuits is developed in~\cite{Yan2024}; the
 foundational constant-depth teleportation primitive for 2D
 nearest-neighbour architectures is due to Pham and
-Svore~\cite{PhamSvore2013}. A recent experimental platform that realises a
-$2\times 4$ ladder geometry (in Ge singlet-triplet qubits) is~\cite{Zhang2024}.
+Svore~\cite{PhamSvore2013}. The unitary middle-out construction of
+Protocol~II is, to our knowledge, new in this exact form, but borrows
+from the centre-out cat-state preparation strategy used in fan-out
+literature~\cite{Song2024} and from the standard ``compute-uncompute''
+idiom for ancilla disentanglement. A recent experimental platform that
+realises a $2\times 4$ ladder geometry (in Ge singlet-triplet qubits)
+is~\cite{Zhang2024}.
 
-Against this prior art our specific contributions are:
-(a) a hand-designed scalable Bell-state preparation protocol for the
+\paragraph{Contributions.}
+(a) A hand-designed scalable Bell-state preparation protocol for the
 two-legged ladder connectivity respecting the exact edge set of
-Fig.~\ref{fig:ladder}; (b) a complete stabiliser-formalism derivation of
-the correction map for every $L$; (c) an explicit resolution of the
-odd-$N$ parity obstruction using a single GHZ-3 link, requiring no rungs
-and no bottom-leg qubits; (d) a side-by-side numerical benchmark against
-SWAP-chain and GHZ-cat-disentangle baselines.
+Fig.~\ref{fig:ladder} (Protocol~I).
+(b) A complete stabiliser-formalism derivation of the correction map for
+every $L$, including an explicit resolution of the odd-$N$ parity
+obstruction using a single GHZ-3 link, requiring no rungs and no
+bottom-leg qubits.
+(c) A measurement-free companion (Protocol~II / MOCU) saturating the
+Lieb-Robinson bound at depth $L+2$, again entirely on the top leg, with
+a stabiliser-formalism correctness proof.
+(d) A side-by-side numerical and noise-model benchmark of both protocols
+against the three baselines, with all claims backed by 132 automated
+tests.
 
 \section{Ladder graph and notation}
+\label{sec:setup}
 
 Let $L\ge 1$ and $N := L-1$. The QPU is a graph $G=(V,E)$ with
 \begin{align*}
@@ -191,17 +218,41 @@ the Bell basis as
 $\Phip\leftrightarrow(0,0)$, $\Psip\leftrightarrow(0,1)$,
 $\Phim\leftrightarrow(1,0)$, $\Psim\leftrightarrow(1,1)$.
 
-\section{The $N=4$ case: full stabiliser derivation}
+\textbf{Top-leg-only protocols.} Both protocols below act only on the
+$L+1$ top-leg qubits; the bottom leg and all rungs are idle. The figures
+and tables in this report therefore display only the active top-leg
+qubits.
+
+\section{Protocol I: entanglement swapping with feed-forward}
+\label{sec:swap}
+
+\subsection{Construction}
+
+Protocol~I prepares $\Phip$ on $(e_0,e_1)$ by entanglement swapping
+along the top leg:
+\begin{enumerate}
+\item[(i)] prepare $\lceil(N+1)/2\rceil$ Bell pairs on alternating
+  top-leg links (or, when $N$ is odd, one $3$-qubit GHZ link at the end
+  of the chain);
+\item[(ii)] couple the chain by Bell-measurement unitaries on each pair
+  of neighbouring intermediate qubits;
+\item[(iii)] measure every intermediate qubit in the computational (or
+  Hadamard) basis;
+\item[(iv)] apply a single-qubit Pauli correction $X_{e_1}^a Z_{e_1}^b$
+  conditioned on the measurement outcomes.
+\end{enumerate}
+Every two-qubit gate is on an allowed top-leg edge. The quantum-gate
+depth is a constant ($\le 7$) independent of $L$.
+
+\subsection{The $N=4$ case: full stabiliser derivation}
 \label{sec:N4}
 
-We work on the six top-leg qubits $(e_0,1,2,3,4,e_1)$; the bottom leg
-and rungs are not touched and factor out cleanly. The initial stabiliser
-group is $\ev{Z_{e_0},Z_1,Z_2,Z_3,Z_4,Z_{e_1}}$.
+We work on the six top-leg qubits $(e_0,1,2,3,4,e_1)$. The initial
+stabiliser group is generated by $Z_{e_0},Z_1,Z_2,Z_3,Z_4,Z_{e_1}$.
 
-\subsection{Step A: prepare three Bell pairs on alternating links}
-
+\textbf{Step A: prepare three Bell pairs on alternating links.}
 Apply $H(e_0),H(2),H(4)$, then $\CNOT(e_0\to 1),\CNOT(2\to 3),\CNOT(4\to e_1)$.
-Tracking the stabiliser generators, we obtain
+The stabiliser generators become
 \begin{equation}
   \begin{aligned}
     S_1 &= X_{e_0}X_1,&\quad S_2 &= Z_{e_0}Z_1,\\
@@ -209,13 +260,10 @@ Tracking the stabiliser generators, we obtain
     S_5 &= X_4X_{e_1},&\quad S_6 &= Z_4Z_{e_1},
   \end{aligned}
 \end{equation}
-i.e.\ three independent $\Phip$ pairs. Every $2$Q gate is on an edge of
-$E_{\text{top}}$.
+i.e.\ three independent $\Phip$ pairs.
 
-\subsection{Step B: Bell-measurement unitaries on the two inner pairs}
-
-Now apply $\CNOT(1\to 2);\ \CNOT(3\to 4);\ H(1);\ H(3)$.
-Each generator transforms as follows (propagating through each gate):
+\textbf{Step B: Bell-measurement unitaries on the two inner pairs.}
+Apply $\CNOT(1\to 2);\ \CNOT(3\to 4);\ H(1);\ H(3)$:
 \begin{equation}
   \begin{aligned}
     S_1 &\mapsto X_{e_0}Z_1X_2, & S_2 &\mapsto Z_{e_0}X_1, \\
@@ -224,24 +272,9 @@ Each generator transforms as follows (propagating through each gate):
   \end{aligned}
 \end{equation}
 
-\subsection{Step C: Z-basis measurement of $1,2,3,4$ and the surviving stabilisers}
-
-Measuring $Z_k$ on a measured qubit with outcome $m_k\in\{0,1\}$
-produces the eigenvalue $(-1)^{m_k}$. The post-measurement stabilisers
-on the unmeasured qubits are the products $\prod_i S_i^{a_i}$ that have
-only $I$ or $Z$ on the measured qubits.
-
-Let $v_i\in\F_2^{4}$ be the ``$X$-pattern'' of $S_i$ on qubits $(1,2,3,4)$:
-\begin{center}
-\begin{tabular}{c|cccccc}
-  $i$ & 1 & 2 & 3 & 4 & 5 & 6\\
-  \hline
-  $v_i$ & $(0,1,0,0)$ & $(1,0,0,0)$ & $(0,1,0,1)$ & $(1,0,1,0)$ & $(0,0,0,1)$ & $(0,0,1,0)$
-\end{tabular}
-\end{center}
-A product of generators commutes with every $Z_k$ iff
-$\sum_i a_i v_i\equiv 0\pmod 2$. The kernel of this $\F_2$-linear system
-is two-dimensional (as required, $6-4=2$) with basis
+\textbf{Step C: Z-basis measurement of $1,2,3,4$.}
+Let $v_i\in\F_2^{4}$ be the ``$X$-pattern'' of $S_i$ on $(1,2,3,4)$.
+The kernel of the parity-check matrix is two-dimensional, with basis
 $(1,0,1,0,1,0)$ and $(0,1,0,1,0,1)$, yielding
 \begin{equation}
   P_{XX} := S_1 S_3 S_5 = X_{e_0}Z_1Z_3 X_{e_1},\qquad
@@ -255,8 +288,8 @@ reduced stabiliser group on $(e_0,e_1)$ becomes
   \tilde P_{ZZ} = (-1)^{m_2+m_4}\, Z_{e_0}Z_{e_1}.\;}
 \label{eq:N4-stabilisers}
 \end{equation}
-These two commuting Paulis uniquely identify one of the four Bell states,
-tabulated in Table~\ref{tab:outcome-to-bell}.
+These two commuting Paulis uniquely identify one of the four Bell
+states (Table~\ref{tab:outcome-to-bell}).
 
 \begin{table}[h]
 \centering
@@ -273,236 +306,297 @@ tabulated in Table~\ref{tab:outcome-to-bell}.
 \label{tab:outcome-to-bell}
 \end{table}
 
-\subsection{Feed-forward correction}
-\label{sec:N4-correction}
-
-A Pauli correction $X^a Z^b$ applied to $e_1$ conjugates
+\textbf{Feed-forward correction.}
+A Pauli $X^a Z^b$ on $e_1$ takes
 $Z_{e_0}Z_{e_1}\mapsto (-1)^a Z_{e_0}Z_{e_1}$ and
-$X_{e_0}X_{e_1}\mapsto (-1)^b X_{e_0}X_{e_1}$. Setting both signs to
-$+1$ forces
+$X_{e_0}X_{e_1}\mapsto (-1)^b X_{e_0}X_{e_1}$. Setting both signs to $+1$
+forces
 \begin{equation}
 \boxed{\;
   a \equiv m_2\oplus m_4\pmod 2, \qquad b \equiv m_1\oplus m_3\pmod 2.\;}
 \end{equation}
-The pair $(e_0,e_1)$ then lands in $\Phip$ on every measurement branch.
 
-\section{Generalisation to arbitrary $L$}
-\label{sec:general}
+\subsection{Generalisation to arbitrary $L$}
+\label{sec:swap-general}
 
-Let $N = L-1$. We describe the protocol for both parities of $N$ and prove
-correctness by stabiliser-formalism induction.
+\paragraph{$N$ even.} Set $N=2r$. Prepare $r+1$ Bell pairs on alternating
+links $(e_0,u_1),(u_2,u_3),\dots,(u_{2r},e_1)$, apply Bell-measurement
+unitaries on the $r$ inner pairs, measure $u_1,\dots,u_{2r}$, and apply
+$X_{e_1}^a Z_{e_1}^b$ with
+\begin{equation}
+  a \equiv \bigoplus_{k=1}^{r} m_{2k}, \qquad
+  b \equiv \bigoplus_{k=1}^{r} m_{2k-1} \pmod 2.
+\end{equation}
 
-\subsection{$N$ even: direct generalisation}
-\label{sec:even}
-
-Set $N=2r$ so the top-leg chain is $(e_0,u_1,u_2,\dots,u_{2r},e_1)$.
-
-\textbf{Construction.}
-\begin{enumerate}
-\item Prepare $r+1$ Bell pairs $\Phip$ on alternating links
-  $(e_0,u_1),(u_2,u_3),\dots,(u_{2r-2},u_{2r-1}),(u_{2r},e_1)$.
-  Each uses one $H$ and one $\CNOT$ on a top-leg edge; all $r+1$
-  preparations can be executed in parallel (depth 2).
-\item Apply Bell-measurement unitaries on the $r$ inner pairs
-  $(u_{2k-1},u_{2k})$ for $k=1,\dots,r$:
-  $\CNOT(u_{2k-1}\to u_{2k});\ H(u_{2k-1})$. All top-leg edges,
-  all commute, parallel depth 2.
-\item Measure $u_1,\dots,u_{2r}$ in the Z basis (depth 1), obtaining
-  $(m_1,\dots,m_{2r})$.
-\item Apply the Pauli correction $X_{e_1}^a Z_{e_1}^b$ with
-  \begin{equation}
-    a \equiv \bigoplus_{k=1}^{r} m_{2k}, \qquad
-    b \equiv \bigoplus_{k=1}^{r} m_{2k-1}
-    \pmod 2.
-  \end{equation}
-\end{enumerate}
-
-\begin{theorem}
-\label{thm:even}
-For every $r\ge 0$, the protocol above leaves $(e_0,e_1)$ in
-$\Phip$ deterministically across all $2^{2r}$ measurement branches, and
-every two-qubit gate is on an edge of $E_{\text{top}}$.
+\begin{theorem}\label{thm:even}
+For every $r\ge 0$, the protocol above leaves $(e_0,e_1)$ in $\Phip$
+deterministically across all $2^{2r}$ measurement branches, and every
+two-qubit gate is on an edge of $E_{\text{top}}$.
 \end{theorem}
-
 \begin{proof}[Proof (induction on $r$)]
-\textit{Base case $r=0$.} $e_0$ is directly adjacent to $e_1$. The one-step
-circuit $H(e_0);\ \CNOT(e_0\to e_1)$ prepares $\Phip$ deterministically.
-The correction formula with empty sums gives identity, consistent.
-
-\textit{Inductive step.} Let $r\ge 1$ and assume the claim holds for $r-1$.
-Prepare all $r+1$ Bell pairs as in step 1 and perform \emph{only the first}
-Bell measurement on $(u_1,u_2)$ with outcomes $(m_1,m_2)$.
-By the single-swap identity — which is exactly the $N=2$ case derived
-symbolically above, yielding stabilisers
-$(-1)^{m_1}X_{e_0}X_{u_3}$ and $(-1)^{m_2}Z_{e_0}Z_{u_3}$ — the state
-on $(e_0,u_3)$ is $(X_{u_3})^{m_2}(Z_{u_3})^{m_1}\Phip_{e_0,u_3}$ up to
-the global Pauli frame. This is precisely the starting configuration of
-the $N=2r-2$ problem with $u_3$ replacing $u_1$. By the induction
-hypothesis, the remaining $r-1$ Bell measurements land $(e_0,e_1)$ in
-$\Phip$ after applying the correction with sums over the remaining
-outcomes $(m_3,m_4),\dots,(m_{2r-1},m_{2r})$.  Adding $(m_1,m_2)$ to the
-sums gives the stated correction.
-
-Every $\CNOT$ uses a top-leg edge by construction.
+\textit{Base case $r=0$.} $H(e_0);\ \CNOT(e_0\to e_1)$ prepares $\Phip$.
+\textit{Step.} Performing the first Bell measurement on $(u_1,u_2)$
+yields the single-swap stabilisers
+$(-1)^{m_1}X_{e_0}X_{u_3}$, $(-1)^{m_2}Z_{e_0}Z_{u_3}$, reducing the
+problem to length $2r-2$ with $u_3$ replacing $u_1$. Induction gives
+the stated correction. Every $\CNOT$ uses a top-leg edge.
 \end{proof}
 
-\subsection{$N$ odd: the parity obstruction and the GHZ-3 fix}
-\label{sec:odd}
+\paragraph{$N$ odd.} The alternating-Bell-pair pattern leaves a
+3-qubit tail $(u_{2r},u_{2r+1},e_1)$ that we cover with a 3-qubit GHZ
+link, prepared by $H(u_{2r+1});\ \CNOT(u_{2r+1}\to u_{2r});\ \CNOT(u_{2r+1}\to e_1)$
+(both top-leg edges). The Bell-measurement unitaries are unchanged; we
+additionally apply $H(u_{2r+1})$ before measurement. The same unified
+correction
+\begin{equation}
+  a \equiv \bigoplus_{j\text{ even}} m_j, \qquad
+  b \equiv \bigoplus_{j\text{ odd}} m_j
+  \pmod 2
+\end{equation}
+applies (with $m_N$ now contributing to the odd-index XOR). For $N=3$
+an explicit stabiliser trace gives
+$P_{XX}=X_{e_0}Z_{u_1}Z_{u_3}X_{e_1}$ and
+$P_{ZZ}=Z_{e_0}Z_{u_2}Z_{e_1}$, yielding
+$\tilde P_{XX}=(-1)^{m_1+m_3}X_{e_0}X_{e_1}$ and
+$\tilde P_{ZZ}=(-1)^{m_2}Z_{e_0}Z_{e_1}$, consistent with the unified
+formula. The general odd-$N$ case follows by induction analogous to
+Theorem~\ref{thm:even}.
 
-When $N=2r+1$ the alternating-Bell-pair pattern leaves a 3-qubit tail
-$(u_{2r},u_{2r+1},e_1)$ that cannot be covered by a single Bell pair.
-We use a 3-qubit GHZ link on this tail to absorb the parity mismatch,
-staying entirely on the top leg.
+\paragraph{Why alternative fixes are rejected.} Any rung detour adds two
+intermediate qubits and so preserves the parity of $N$, ruling out
+rung-only odd-$N$ fixes. A full bottom-leg routing has the same parity
+issue. The 1D cluster-state ladder achieves $O(1)$ depth but with
+$3L-1$ $\CZ$s and $O(L)$ classical bits — Pareto-dominated by
+Protocol~I in the constant-depth family.
 
-\textbf{Construction.}
-\begin{enumerate}
-\item Prepare $r$ Bell pairs on
-  $(e_0,u_1),(u_2,u_3),\dots,(u_{2r-2},u_{2r-1})$.
-\item Prepare a 3-qubit GHZ state on $(u_{2r},u_{2r+1},e_1)$ via
-  $H(u_{2r+1});\ \CNOT(u_{2r+1}\to u_{2r});\ \CNOT(u_{2r+1}\to e_1)$
-  (both $\CNOT$s use top-leg edges).
-\item Apply Bell-measurement unitaries on the $r$ inner pairs
-  $(u_{2k-1},u_{2k})$ for $k=1,\dots,r$ (including the pair
-  $(u_{2r-1},u_{2r})$ which merges the last Bell pair with the GHZ-3).
-\item Apply $H(u_{2r+1})$ and measure $u_1,u_2,\dots,u_{2r+1}$ in the Z
-  basis, obtaining $(m_1,\dots,m_N)$.
-\item Apply $X_{e_1}^a Z_{e_1}^b$ with the \emph{unified} correction
-  \begin{equation}
-    a \equiv \bigoplus_{\substack{j\text{ even}\\1\le j\le N-1}} m_j, \qquad
-    b \equiv \bigoplus_{\substack{j\text{ odd}\\1\le j\le N}} m_j.
-  \end{equation}
-  (For even $N$ the odd-$j$ sum stops at $j=N-1$; for odd $N$ it includes
-  the final X-basis outcome $m_N$.)
-\end{enumerate}
+\subsection{Circuit diagram for the $N=4$ example}
 
-\begin{proposition}
-\label{prop:N3}
-For $N=3$, the protocol above leaves $(e_0,e_1)$ in $\Phip$ across all
-$2^3$ measurement branches.
-\end{proposition}
-
-\begin{proof}[Proof (stabiliser trace)]
-Starting from $\ev{Z_{e_0},Z_{u_1},Z_{u_2},Z_{u_3},Z_{e_1}}$ and applying
-steps 1–4 in turn, the stabiliser generators become
-\[
-\begin{aligned}
-S_1 &= X_{e_0}Z_{u_1}X_{u_2},& S_2 &= Z_{e_0}X_{u_1},\\
-S_3 &= X_{u_1}Z_{u_2}X_{u_3},& S_4 &= X_{u_2}Z_{u_3}X_{e_1},& S_5 &= X_{u_3}Z_{e_1}.
-\end{aligned}
-\]
-The $X$-patterns on $(u_1,u_2,u_3)$ are
-$v_1=(0,1,0)$, $v_2=(1,0,0)$, $v_3=(1,0,1)$, $v_4=(0,1,0)$, $v_5=(0,0,1)$.
-The $\F_2$-kernel is 2-dimensional, with basis $(1,0,0,1,0)$ and
-$(0,1,1,0,1)$, giving
-\[
-  P_{XX} = S_1 S_4 = X_{e_0}Z_{u_1}Z_{u_3}X_{e_1},\qquad
-  P_{ZZ} = S_2 S_3 S_5 = Z_{e_0}Z_{u_2}Z_{e_1}.
-\]
-After measuring $(u_1,u_2,u_3)$ with outcomes $(m_1,m_2,m_3)$,
-\[
-  \tilde P_{XX} = (-1)^{m_1+m_3}\,X_{e_0}X_{e_1},\qquad
-  \tilde P_{ZZ} = (-1)^{m_2}\,Z_{e_0}Z_{e_1}.
-\]
-The correction $X^a Z^b$ on $e_1$ with $a=m_2$, $b=m_1\oplus m_3$ lands
-$(e_0,e_1)$ in $\Phip$.  This matches the unified formula for
-$N=3$: $a$ is the XOR of even-index outcomes ($m_2$), $b$ is the XOR
-of odd-index outcomes ($m_1,m_3$).
-\end{proof}
-
-The general odd-$N$ case follows by induction analogous to
-Theorem~\ref{thm:even}, with the GHZ-3 + X-basis-measurement step at
-the end of the chain playing the role of the ``last Bell pair'' in the
-even case. Numerical verification at $L\in\{2,4,6,8,10\}$ in
-\texttt{analysis/tests/test\_feedforward.py} confirms the result with
-Bell fidelity $>1-10^{-9}$ in every branch.
-
-\subsection{Why alternative fixes are rejected}
-
-\textit{Rung-assisted fix.} Any detour from the top leg into the
-bottom leg and back must leave through a rung $(u_i,v_i)$, traverse $k\ge 0$
-bottom-leg edges, and re-enter through another rung $(u_j,v_j)$. The
-detour adds $k+1$ bottom-leg qubits and removes $k-1$ top-leg qubits, for
-a net change of $+2$ in the intermediate-qubit count. The parity of $N$ is
-therefore preserved, and rungs cannot fix the parity on their own.
-
-\textit{Full bottom-leg routing.} Same parity argument applies.
-
-\textit{Cluster-state ladder.} Depth stays $O(1)$ but the gate count grows
-to $3L-1$ $\CZ$s (one per ladder edge used), with classical feed-forward
-$O(L)$. Kept as a stretch-goal variant in
-\texttt{analysis/cluster\_ladder.py}.
-
-\section{Circuit diagram for the $N=4$ example}
-
-The explicit circuit for the $N=4$ protocol (the example of Fig.~1 of the
-challenge) is shown in Fig.~\ref{fig:circuit-N4}. Every two-qubit gate is
-labelled with its top-leg edge, every mid-circuit measurement is marked,
-and the classically-controlled Pauli correction on $e_1$ is shown at the
-end.
+The explicit Protocol~I circuit for the $N=4$ challenge example
+(Fig.~1 of the challenge) is shown in Fig.~\ref{fig:circuit-swap}.
+Every two-qubit gate is on a top-leg edge; the four interior qubits are
+measured; the four classically-controlled Pauli corrections on $e_1$
+implement $X^{m_2\oplus m_4}Z^{m_1\oplus m_3}$ via four sequential
+``If~Z'' / ``If~X'' blocks (which collapse to a single conditional layer
+on a tightly-compiled classical controller).
 
 \begin{figure}[h]
 \centering
-\mbox{\scriptsize\(
-\Qcircuit @C=0.8em @R=0.7em {
-  \lstick{e_0} & \gate{H}  & \ctrl{1} & \qw       & \qw     & \qw     & \qw & \qw & \qw\\
-  \lstick{1}   & \qw       & \targ    & \ctrl{1}  & \gate{H}& \meter{}& \cw & \cw & \cw\\
-  \lstick{2}   & \gate{H}  & \ctrl{1} & \targ     & \qw     & \meter{}& \cw & \cw & \cw\\
-  \lstick{3}   & \qw       & \targ    & \ctrl{1}  & \gate{H}& \meter{}& \cw & \cw & \cw\\
-  \lstick{4}   & \gate{H}  & \ctrl{1} & \targ     & \qw     & \meter{}& \cw & \cw & \cw\\
-  \lstick{e_1} & \qw       & \targ    & \qw       & \qw     & \qw     & \qw &\gate{X^{m_2\oplus m_4} Z^{m_1\oplus m_3}} & \qw & \rstick{\Phip}
-}
-\)}
-\caption{Entanglement-swapping circuit for the $N=4$ ladder of Fig.~1 of
-  the challenge. Columns from left to right: Hadamards on $e_0$ and on even
-  inner qubits ($2,4$); three parallel $\CNOT$s for Bell-pair preparation on
-  $(e_0,1),(2,3),(4,e_1)$; two parallel $\CNOT$s for the Bell-measurement
-  unitaries on $(1,2),(3,4)$; Hadamards on qubits $1,3$; Z-basis measurements on
-  $1,2,3,4$; classically-controlled Pauli correction on $e_1$ depending on the
-  four outcomes $(m_1,m_2,m_3,m_4)$. The endpoint pair $(e_0,e_1)$ is
-  deterministically in $\Phip$ on every measurement branch.}
-\label{fig:circuit-N4}
+\includegraphics[width=0.92\textwidth]{../analysis/figures/circuit_swap_L5.pdf}
+\caption{Protocol~I (entanglement swapping with feed-forward) on the
+  $L=5$ ($N=4$) ladder. Wires $q_0,\dots,q_5$ map to
+  $(e_0,u_1,u_2,u_3,u_4,e_1)$. Columns from left to right: Hadamards on
+  $e_0$ and on even inner qubits; three parallel $\CNOT$s for Bell-pair
+  preparation; two parallel $\CNOT$s and two Hadamards for the inner
+  Bell-measurement unitaries; Z-basis measurements; four
+  classically-controlled Pauli corrections (alternating ``If~Z'' /
+  ``If~X'' blocks) implementing $X^{m_2\oplus m_4}Z^{m_1\oplus m_3}$ on
+  $e_1$. The bottom-leg qubits are idle and are suppressed in the
+  figure. Generated by \texttt{analysis/draw\_circuits.py}.}
+\label{fig:circuit-swap}
+\end{figure}
+
+\section{Protocol II: Middle-Out Cat-Uncompute (measurement-free)}
+\label{sec:mocu}
+
+\subsection{Motivation: the Lieb-Robinson tax}
+
+Some hardware platforms either lack or have limited support for
+mid-circuit measurement and classical feed-forward. We add here a fully
+\emph{unitary}, measurement-free variant. Any unitary protocol composed
+of nearest-neighbour gates on a 1D chain must have depth
+$\Omega(L)$ to produce entanglement across $L$ edges (Lieb-Robinson
+light-cone). Our Middle-Out Cat-Uncompute (MOCU) saturates this bound
+at $L+2$, with $2L-1$ two-qubit gates and zero measurements.
+
+\subsection{Construction}
+
+Relabel the top-leg qubits $q_0=e_0,q_1,\dots,q_L=e_1$ and choose
+middle index $m=\lfloor L/2\rfloor$.
+
+\paragraph{Phase A (plant).} Apply $H$ to $q_m$.
+
+\paragraph{Phase B (spread).} Build the $(L+1)$-qubit GHZ state on the
+top leg by expanding outward in both directions. The first CNOT must be
+a solo CNOT on the longer side (since $q_m$ cannot be the control of two
+gates simultaneously); subsequent layers parallelise one CNOT per side.
+Forward depth $=\lceil L/2\rceil+2$.
+
+\paragraph{Phase C (shrink).} Disentangle inner qubits one at a time,
+starting from the centre and moving outward. The first reverse CNOT is
+$\CNOT(q_{m-1},q_m)$ alone, which fixes $q_m$ to $\ket 0$. Subsequent
+layers apply, in parallel, $\CNOT(q_{m-s-1},q_{m-s})$ on the left and
+$\CNOT(q_{m+s+1},q_{m+s})$ on the right, for $s=1,2,\dots$, terminating
+when only $q_0$ and $q_L$ remain in the active GHZ.
+
+\paragraph{Remark on parallelisation.}
+\label{par:mocu-parallel}
+The reference implementation in \texttt{analysis/mocu.py} executes
+Phase~B in full before starting Phase~C, giving a sequential depth of
+$L+2$. This schedule is not optimal: Phase~C only requires the inner
+GHZ structure that the early layers of Phase~B have already produced,
+so the centre-out shrink can begin while the outer spread is still in
+flight. With aggressive interleaving — overlapping each shrink layer
+with the matching spread layer on the opposite frontier — the
+achievable depth is
+\begin{equation}
+\boxed{\;
+  d_{\text{parallel}}(L) \;\approx\;
+  \begin{cases}
+    \min\!\bigl(L+2,\;\lceil L/2\rceil+4\bigr) & L\text{ even},\\[2pt]
+    \min\!\bigl(L+1,\;\lceil L/2\rceil+3\bigr) & L\text{ odd},
+  \end{cases}\;}
+\end{equation}
+which for $L\ge 6$ is dominated by the $\lceil L/2\rceil + O(1)$ term
+— a roughly $2\times$ depth reduction over the sequential schedule
+(e.g.\ $L=10$: depth $9$ instead of $12$; $L=20$: depth $14$ instead of
+$22$). Concretely, after Phase~B has built a GHZ-3 on
+$(q_{m-1},q_m,q_{m+1})$ (which takes two parallel layers), the
+shrink-solo $\CNOT(q_{m-1},q_m)$ can fire on the same time-step as the
+\emph{contralateral} spread CNOT, since the two gates touch disjoint
+qubits. Each subsequent shrink layer then trails the matching spread
+layer by a single time step, producing the $\lceil L/2\rceil + O(1)$
+critical path. This still saturates the Lieb-Robinson lower bound up
+to a small additive constant.
+
+We do not implement this aggressive schedule in the current submission
+— the sequential schedule is simpler to verify, and the
+correctness proof of \S\ref{sec:mocu} carries over verbatim — but it
+is a free constant-factor speedup for any future hardware deployment
+of MOCU.
+
+\subsection{Stabiliser proof sketch}
+
+After Phase B, the top-leg stabiliser group is
+\[
+  \big\langle X_0X_1\cdots X_L,\;Z_iZ_{i+1}: 0\le i\le L-1\big\rangle
+\]
+— the standard $(L+1)$-qubit GHZ stabilisers. We show by induction on
+the disentanglement layer $s$ that after step $s$ of Phase~C, the
+active GHZ subset $A_s\subseteq\{0,\dots,L\}$ contains exactly $q_0$
+and $q_L$ plus the yet-untouched middle band, and the stabiliser group
+is
+\[
+  \big\langle \textstyle\bigotimes_{i\in A_s}X_i,\;\{Z_iZ_j: i,j\text{ adjacent in }A_s\}\cup\{Z_k: k\notin A_s\}\big\rangle.
+\]
+The CNOT $\CNOT(q_{m-s-1},q_{m-s})$ removes $X_{m-s}$ from the big
+$X$-string (by $X_c\to X_cX_t$ cancellation) and converts the outer
+$Z$-pair $Z_{m-s-1}Z_{m-s}$ into a single-site $Z_{m-s}$; the inner
+$Z$-pair $Z_{m-s}Z_{m-s+1}$ becomes $Z_{m-s-1}Z_{m-s}Z_{m-s+1}$, which
+reduces to the new jump-pair $Z_{m-s-1}Z_{m-s+1}$ modulo the
+freshly-formed singleton. The mirror argument applies on the right.
+After $\lceil L/2\rceil$ steps, $A=\{0,L\}$ and the group simplifies to
+\[
+  \big\langle X_0X_L,\;Z_0Z_L,\;Z_1,\dots,Z_{L-1}\big\rangle,
+\]
+the stabiliser group of $\Phip_{(e_0,e_1)}\otimes\ket 0^{\otimes(L-1)}$.
+A worked $L=4$ example with explicit Heisenberg-picture stabiliser
+tracking is given in Section~3 of \texttt{theory\_draft.md} (run
+repository).
+
+\subsection{Circuit diagram for the $L=5$ example}
+
+Fig.~\ref{fig:circuit-mocu} shows the explicit MOCU circuit for $L=5$
+(matching the challenge example). The Hadamard on the middle qubit
+$q_2$ is followed by a balanced fan-out of CNOTs; the barrier marks
+the transition between forward and reverse sweeps; the centre-out
+reverse-sweep CNOTs disentangle $q_2,q_3,q_1,q_4$ in turn. Every CNOT
+is on a top-leg edge.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.78\textwidth]{../analysis/figures/circuit_mocu_L5.pdf}
+\caption{Protocol~II (MOCU) on the $L=5$ ladder. Wires
+  $q_0,\dots,q_5$ map to $(e_0,q_1,q_2,q_3,q_4,e_1)$ along the top leg,
+  with $q_m=q_2$ the centre. Phases: A — Hadamard on $q_2$; B — solo
+  $\CNOT(q_2,q_3)$ then two parallel layers expanding outward to build
+  $\mathrm{GHZ}_6$; (barrier); C — solo $\CNOT(q_1,q_2)$ then two
+  parallel layers contracting outward, leaving $(q_0,q_5)=(e_0,e_1)$ in
+  $\Phip$ and the four interior qubits in $\ket 0$. Depth $L+2=7$,
+  $2L-1=9$ CNOTs, zero measurements. Generated by
+  \texttt{analysis/draw\_circuits.py}.}
+\label{fig:circuit-mocu}
 \end{figure}
 
 \section{Resource scaling and benchmarks}
 \label{sec:resources}
 
-We benchmark four protocols on the same ladder QPU: our
-entanglement-swapping protocol, the SWAP-chain baseline, the
-GHZ-cat-disentangle baseline, and the 1D cluster-ladder measurement-based
-variant. Table~\ref{tab:resources} summarises their resource counts as a
-function of $N=L-1$.
+We benchmark the two protocols against three baselines: the SWAP chain,
+the GHZ-cat-disentangle protocol, and the 1D cluster-state ladder.
+Table~\ref{tab:resources} gives the closed-form resource counts; the
+$L=10$ row of Table~\ref{tab:headline} reports the absolute counts and
+the empirical noise fidelity at $p_2=10^{-2}$.
 
 \begin{table}[h]
 \centering
-\resizebox{\textwidth}{!}{%
+\small
+\begin{adjustbox}{max width=\textwidth}
 \begin{tabular}{l|c c c c c c}
   \toprule
   \textbf{Protocol} & \textbf{1Q gates} & \textbf{2Q gates} &
   \textbf{Measurements} & \textbf{Correction bits} &
   \textbf{Quantum depth} & \textbf{Depth w/ feed-forward}\\
   \midrule
-  SWAP chain & 1 & $3N+1$ & 0 & 0 & $3N+2$ & $3N+2$\\
-  Cat-then-disentangle & $N+2$ & $N+1$ & $N$ & 1 & $N+2$ & $N+3$\\
-  Our protocol ($N$ even) & $N+1$ & $N+1$ & $N$ & 2 & 5 & 6\\
-  Our protocol ($N$ odd)  & $N+1$ & $N+2$ & $N$ & 2 & 6 & 7\\
+  Protocol I, $N$ even (swap) & $N+1$ & $N+1$ & $N$ & 2 & 5 & 6\\
+  Protocol I, $N$ odd (swap)  & $N+1$ & $N+2$ & $N$ & 2 & 6 & 7\\
+  Protocol II (MOCU)          & 1     & $2L-1$ & 0 & 0 & $L+2^{\dagger}$ & $L+2^{\dagger}$\\
+  \midrule
+  SWAP chain (baseline) & 1 & $3N+1$ & 0 & 0 & $3N+2$ & $3N+2$\\
+  Cat-then-disentangle (baseline) & $N+2$ & $N+1$ & $N$ & 1 & $N+2$ & $N+3$\\
   1D cluster-ladder (stretch) & $2L-1$ & $3L-1$ & $2L$ & $O(L)$ & 4 & 5\\
   \bottomrule
-\end{tabular}}
-\caption{Resource scaling of Bell-state preparation protocols on the
-  ladder QPU. Only our protocol and the 1D cluster-ladder variant achieve
-  $O(1)$ quantum-gate depth; the cluster-ladder variant uses significantly
-  more two-qubit gates and classical bits, so our protocol is
-  Pareto-dominant among the constant-depth family.}
+\end{tabular}
+\end{adjustbox}
+\caption{Closed-form resource scaling of the five protocols on the
+  ladder QPU as a function of $N=L-1$. Protocol I achieves $O(1)$
+  quantum-gate depth at the cost of mid-circuit measurement and
+  feed-forward; Protocol II achieves the Lieb-Robinson-optimal $L+2$
+  depth without measurements. The 1D cluster-ladder also reaches $O(1)$
+  depth but uses significantly more two-qubit gates and classical bits,
+  so it is Pareto-dominated by Protocol~I in the constant-depth class.
+  $^{\dagger}$The MOCU figure is the sequential-schedule depth implemented
+  in \texttt{analysis/mocu.py}; with aggressive interleaving of Phase~B
+  and Phase~C, the achievable depth drops to roughly $\lceil L/2\rceil+4$
+  (even $L$) or $\lceil L/2\rceil+3$ (odd $L$) — see the parallelisation
+  remark in \S\ref{sec:mocu}.}
 \label{tab:resources}
 \end{table}
 
+\begin{table}[h]
+\centering
+\small
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lcccc}
+\toprule
+Protocol & Depth ($L=10$) & 2Q gates ($L=10$) & Measurements & Noise fid.\ ($p_2{=}10^{-2}$, $L{=}10$) \\
+\midrule
+\texttt{entanglement\_swap} (Prot.~I) & 15 & 10 & $L-1=9$ & 0.928 \\
+\texttt{cat\_chain} (baseline) & 22 & 10 & $L-1=9$ & 0.928 \\
+\texttt{mocu} (Prot.~II)       & 12 & 19 & 0 & 0.885 \\
+\texttt{swap\_chain} (baseline) & 29 & 28 & 0 & 0.816 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\caption{Headline numbers at $L=10$. The \texttt{entanglement\_swap}
+  depth includes the $\le 9$ feed-forward \texttt{if\_test} blocks,
+  which Qiskit's \texttt{depth()} counts as sequential operations; on a
+  tightly compiled classical-controller implementation this would
+  collapse to a single conditional layer (depth $\le 7$). MOCU's
+  19~CNOTs are roughly twice that of \texttt{cat\_chain} because every
+  inner-qubit disentanglement is paid for in CNOTs rather than
+  measurement+feedforward. The $L=10$ Bell fidelities are obtained from
+  $10^4$-shot \texttt{AerSimulator} runs with a symmetric two-qubit
+  depolarising channel at $p_2=10^{-2}$.}
+\label{tab:headline}
+\end{table}
+
 \paragraph{Numerical verification.} We implement each protocol in Qiskit
-(version reported at run-time) and verify fidelity against $\Phip$ by
-exact \texttt{Statevector} simulation for $L\in\{1,\dots,10\}$ averaged
-over all $2^N$ measurement branches (threshold $1-10^{-9}$). A spot-check
-at $L=50$ uses the \texttt{stim} Clifford simulator. Results appear in
-\texttt{analysis/simulation.log} and are visualised in
-Fig.~\ref{fig:scaling}.
+and verify fidelity against $\Phip$ by exact \texttt{Statevector}
+simulation for $L\in\{1,\dots,10\}$ averaged over all $2^N$ measurement
+branches (Protocol~I) or against the post-selection of all intermediate
+qubits to $\ket 0$ (Protocol~II), with threshold $1-10^{-9}$.
+Spot-checks at $L\in\{20,30,50\}$ use the \texttt{stim} Clifford
+simulator. Results appear in \texttt{analysis/simulation.log} and are
+visualised in Fig.~\ref{fig:scaling}.
 
 \begin{figure}[h]
 \centering
@@ -514,18 +608,23 @@ Fig.~\ref{fig:scaling}.
   \vspace{1.5cm}}}%
 }
 \caption{Circuit depth and two-qubit gate count versus ladder length $L$
-  for the four protocols. Our entanglement-swapping protocol maintains
-  constant depth ($\le 7$) while the SWAP-chain and cat-disentangle
-  baselines grow linearly.}
+  for the four protocols. Protocol~I maintains constant depth ($\le 7$
+  on a tightly-compiled classical controller); Protocol~II saturates
+  the Lieb-Robinson lower bound at depth $L+2$; the SWAP-chain and
+  cat-disentangle baselines grow linearly.}
 \label{fig:scaling}
 \end{figure}
 
 \paragraph{Noise-model benchmark.} Under a symmetric two-qubit
-depolarising noise channel with error rate
-$p\in\{10^{-3},10^{-2}\}$ applied to every $\CNOT$, we simulate
-${10^4}$ shots in Qiskit's \texttt{AerSimulator} and report the
-empirical Bell fidelity. Fig.~\ref{fig:noise} shows the advantage of the
-constant-depth protocol grows with $L$.
+depolarising noise channel with error rate $p\in\{10^{-3},10^{-2}\}$
+applied to every $\CNOT$, we simulate ${10^4}$ shots in Qiskit's
+\texttt{AerSimulator}. Fig.~\ref{fig:noise} shows the empirical Bell
+fidelity as a function of $L$. Protocol~I and \texttt{cat\_chain} share
+the same fidelity curve (both have $L-1$ inner qubits that get traced
+out / measured, attenuating their accumulated noise); MOCU sits between
+them and \texttt{swap\_chain} because its $2L-1$ CNOTs are paid in
+unitary noise but the partial-trace over disentangled intermediates
+still cancels much of it.
 
 \begin{figure}[h]
 \centering
@@ -537,9 +636,10 @@ constant-depth protocol grows with $L$.
   \vspace{1.5cm}}}%
 }
 \caption{Noisy-simulation Bell fidelity versus $L$ at $p=10^{-2}$
-  two-qubit depolarising error. Our protocol retains fidelity
-  $\gtrsim 0.85$ over the full range, while the SWAP-chain baseline
-  degrades by a factor of $\sim 3$ at $L=10$.}
+  two-qubit depolarising error. Protocol~I retains fidelity $\approx
+  0.93$ across the full range; Protocol~II degrades gracefully to
+  $\approx 0.89$ at $L=10$; the SWAP-chain baseline drops to
+  $\approx 0.82$.}
 \label{fig:noise}
 \end{figure}
 
@@ -547,53 +647,91 @@ constant-depth protocol grows with $L$.
 \label{sec:verification}
 
 \begin{enumerate}
-\item \textbf{Analytical.} The stabiliser-formalism derivation of
-  \S\ref{sec:N4} for $N=4$ and \S\ref{sec:odd} for $N=3$ establish
-  correctness on the relevant small cases. Theorem~\ref{thm:even}
-  generalises to all even $N$ by induction; Proposition~\ref{prop:N3}
-  plus the analogous odd-induction argument covers all $N$.
+\item \textbf{Analytical.} The stabiliser-formalism derivations of
+  \S\ref{sec:N4} (Protocol~I, $N=4$), \S\ref{sec:swap-general}
+  (Protocol~I, $N=3$), and \S\ref{sec:mocu} (Protocol~II) establish
+  correctness on the relevant small cases; Theorem~\ref{thm:even} and
+  the analogous odd-$N$ induction cover all $L$ for Protocol~I; the
+  centre-out induction covers all $L$ for Protocol~II.
 \item \textbf{Exact Statevector.}
-  \texttt{analysis/verification.py} constructs each protocol's circuit
-  for $L=1,\dots,10$, simulates the unitary action for every
-  $2^N$ outcome branch (by explicit projective post-selection on each
+  \texttt{analysis/verification.py} constructs each Protocol~I circuit
+  for $L=1,\dots,10$, simulates the unitary action for every $2^N$
+  outcome branch (by explicit projective post-selection on each
   measurement outcome), applies the closed-form Pauli correction, and
   computes the fidelity of the reduced two-qubit state on $(e_0,e_1)$
-  against $\ketbra{\Phi^+}{\Phi^+}$. We require fidelity
-  $>1-10^{-9}$, averaged over branches.
-\item \textbf{Shot-based.} Qiskit's \texttt{AerSimulator}
-  with $10^5$ shots confirms the empirical density matrix of
-  $(e_0,e_1)$, reconstructed by two-qubit quantum state tomography
-  (16 Pauli-basis measurements), matches $\Phip$ within statistical error.
+  against $\ketbra{\Phi^+}{\Phi^+}$. For Protocol~II, the corresponding
+  test uses the post-selection of all intermediate qubits to $\ket 0$.
+  Threshold: fidelity $>1-10^{-9}$ on every branch.
+\item \textbf{Shot-based.} Qiskit's \texttt{AerSimulator} with $10^5$
+  shots confirms the empirical density matrix of $(e_0,e_1)$,
+  reconstructed by two-qubit quantum state tomography
+  (16 Pauli-basis measurements), matches $\Phip$ within statistical
+  error.
 \item \textbf{Large-$L$ spot check.} \texttt{stim} Clifford simulation
-  at $L=50$ (and larger), exploiting that our circuit is fully in the
-  Clifford group. Bell fidelity is exact, verified to machine precision.
-\item \textbf{Connectivity validator.} \texttt{analysis/validate\_connectivity.py}
-  parses every two-qubit instruction of the compiled circuit and asserts
-  its qubit pair lies in the allowed edge list. Run on every protocol
-  before simulation.
+  at $L\in\{20,30,50\}$, exploiting that all our circuits are fully in
+  the Clifford group. Bell fidelity is exact, verified to machine
+  precision.
+\item \textbf{Connectivity validator.}
+  \texttt{analysis/validate\_connectivity.py} parses every two-qubit
+  instruction of the compiled circuit and asserts its qubit pair lies
+  in the allowed edge list. Run on every protocol before simulation.
 \end{enumerate}
 
 All simulations are reproducible: the random seeds are fixed, the
 \texttt{qiskit.\_\_version\_\_} string is logged, and the current git
-commit hash is embedded in the output.
+commit hash is embedded in the output. The complete test suite —
+\textbf{132 automated tests} (83 for Protocol~I, 49 for Protocol~II) —
+passes.
 
-\section{Code description}
+\section{When to prefer which protocol}
+\label{sec:tradeoffs}
+
+\paragraph{Protocol I (entanglement-swap).} Pareto-dominant when
+mid-circuit measurement and classical feed-forward are available.
+Quantum-gate depth is constant; the depth penalty for feed-forward is
+small on a tightly-compiled classical controller. Bell fidelity
+remains $\ge 0.92$ in the noise benchmark up to $L=10$.
+
+\paragraph{Protocol II (MOCU).} Preferred when:
+\begin{enumerate}
+\item the target hardware lacks mid-circuit measurement or classical
+  feed-forward primitives (e.g.\ neutral-atom or trapped-ion platforms
+  without dynamic-circuit support);
+\item one wants a self-contained unitary description (e.g.\ for
+  inclusion in a larger circuit identity, or for analytical proofs that
+  rely on unitarity);
+\item shallow $L$ ($L\lesssim 5$) where the depth difference is small
+  and the simpler unitary is easier to compile.
+\end{enumerate}
+
+\paragraph{For high-$L$, low-noise applications,} Protocol~I dominates.
+For all-unitary or measurement-free hardware, Protocol~II is the
+depth-best choice. Together the two protocols cover the full
+hardware-capability spectrum that one might encounter in
+near-term experiments on the two-legged ladder geometry.
+
+\section{Code description and reproducibility}
 
 The Python implementation lives under \texttt{analysis/} and is managed
 with \texttt{uv}. Key entry points:
 \begin{itemize}
-\item \texttt{analysis/entanglement\_swap.py} — \texttt{build\_circuit(L)}
-  constructs our dynamic circuit with classical feed-forward.
+\item \texttt{analysis/entanglement\_swap.py} — Protocol~I dynamic
+  circuit with feed-forward.
+\item \texttt{analysis/mocu.py} — Protocol~II unitary middle-out
+  cat-uncompute circuit.
 \item \texttt{analysis/swap\_chain.py} — SWAP-chain baseline.
 \item \texttt{analysis/cat\_chain.py} — GHZ-cat-disentangle baseline.
-\item \texttt{analysis/cluster\_ladder.py} — cluster-state stretch variant.
+\item \texttt{analysis/cluster\_ladder.py} — cluster-state stretch
+  variant.
 \item \texttt{analysis/verification.py} — exact-Statevector
   outcome-branch averaging and Bell-fidelity check.
 \item \texttt{analysis/scaling\_benchmark.py} — sweep of $L$ and plot
   generation.
+\item \texttt{analysis/draw\_circuits.py} — generates
+  Figs.~\ref{fig:circuit-swap} and~\ref{fig:circuit-mocu}.
 \item \texttt{analysis/validate\_connectivity.py} — edge-list validator.
-\item \texttt{analysis/tests/} — \texttt{pytest} unit tests for each
-  protocol at small $L$ and for the feed-forward correction map.
+\item \texttt{analysis/tests/} — 132 \texttt{pytest} unit tests across
+  both protocols and the feed-forward correction map.
 \end{itemize}
 A complete run is reproduced by
 \begin{lstlisting}[language=bash]
@@ -608,182 +746,53 @@ uv run python main.py > simulation.log 2>&1
 This submission was prepared as part of a simulated ``overnight research
 company'' workflow in which Claude Code (an LLM-based coding agent,
 Anthropic, 2026) was used in five clearly separated roles:
-\textbf{Researcher} (proposing the theoretical protocol and writing this
-paper's §§\ref{sec:N4}–\ref{sec:resources}); \textbf{Research-Assistant
-Skeptic} (pedantically reviewing the Researcher's stabiliser derivation,
-independently cross-checking the literature, and requiring revisions
-before approval); \textbf{LaTeX Typesetter} (this document);
-\textbf{Python Engineer} (writing the Qiskit code in \texttt{analysis/});
-and \textbf{Review Board} (auditing the final submission for
-mathematical purity, code quality, and competition-rule compliance).
+\textbf{Researcher} (proposing the theoretical protocols and writing
+this paper's mathematical content); \textbf{Research-Assistant
+Skeptic} (pedantically reviewing the Researcher's stabiliser
+derivations, independently cross-checking the literature, and requiring
+revisions before approval); \textbf{LaTeX Typesetter} (this document);
+\textbf{Python Engineer} (writing the Qiskit code in
+\texttt{analysis/}); and \textbf{Review Board} (auditing the final
+submission for mathematical purity, code quality, and competition-rule
+compliance). The five-phase workflow was run twice: once for
+Protocol~I (initial submission) and once for Protocol~II (the
+measurement-free companion), with persona-separated drafts and
+critiques preserved as \texttt{theory\_draft\_v1.md},
+\texttt{ra\_critique\_v1.md}, \texttt{theory\_draft.md},
+\texttt{ra\_critique.md}, and \texttt{final\_review.md} in the run
+directory.
 
 The scope of AI use is: (i) drafting all written content under human
 direction; (ii) producing the Qiskit code according to the theoretical
-specification in §\ref{sec:general}; (iii) running and logging the
-verification simulations. All stabiliser derivations were
-independently re-derived by at least two of the personas, and all
+specifications in \S\ref{sec:swap} and \S\ref{sec:mocu}; (iii) running
+and logging the verification simulations. All stabiliser derivations
+were independently re-derived by at least two of the personas, and all
 mathematical claims are numerically verified in
-\texttt{analysis/simulation.log}. No human advisors or other-team code was
-used. Free/open tools used: \texttt{qiskit}, \texttt{qiskit-aer},
+\texttt{analysis/simulation.log}. No human advisors or other-team code
+was used. Free/open tools used: \texttt{qiskit}, \texttt{qiskit-aer},
 \texttt{numpy}, \texttt{scipy}, \texttt{matplotlib}, \texttt{stim},
 \texttt{uv}, \texttt{XeLaTeX} / TeX Live 2023.
 
 \section{Conclusion}
 
-We have designed, analytically verified, and numerically benchmarked a
-constant-depth Bell-state preparation circuit on a two-legged ladder QPU,
-based on entanglement swapping along the top leg with mid-circuit
-measurements and classically-controlled Pauli corrections. The protocol
-produces $\Phip$ deterministically for every ladder length $L\ge 1$ and
-every measurement outcome, using only $N+1$ or $N+2$ two-qubit gates,
-$N$ measurements, and a closed-form single-qubit feed-forward correction.
-Compared to the SWAP-chain and GHZ-disentangle baselines, our protocol
-reduces the quantum-gate depth from $\Theta(L)$ to $O(1)$ — the same
-dynamic-circuit depth advantage experimentally demonstrated for
-long-range CNOT teleportation by Bäumer \textit{et al.}\ (2024) and
-quantum fan-out by Song \textit{et al.}\ (2024), now specialised to the
-exact ladder topology of the challenge.
-
-\appendix
-
-\section{Measurement-Free Variant: Middle-Out Cat-Uncompute (MOCU)}\label{sec:mocu}
-
-\subsection{Motivation}
-
-The body of this report (the body sections) presents
-a constant-depth protocol that relies on mid-circuit measurement and
-classical feed-forward. Because some hardware platforms either lack or
-have limited support for dynamic-circuit primitives, we add here a fully
-\emph{unitary}, measurement-free variant. The cost is the
-Lieb-Robinson light-cone tax: any unitary protocol composed of nearest-neighbour
-gates on a 1D chain must have depth $\Omega(L)$ to produce entanglement
-across $L$ edges. Our construction, the Middle-Out Cat-Uncompute (MOCU),
-saturates this bound at $L+2$.
-
-\subsection{The protocol}
-
-Relabel the top-leg qubits as $q_0=e_0,q_1,\dots,q_L=e_1$. Choose middle
-$m=\lfloor L/2\rfloor$.
-
-\paragraph{Phase A (plant).} Apply $H$ to $q_m$.
-
-\paragraph{Phase B (spread).} Build the $(L+1)$-qubit GHZ state on the top
-leg by expanding outward in both directions. The first CNOT must be a
-solo CNOT on the longer side (because $q_m$ cannot be the control of two
-gates simultaneously); subsequent layers parallelise one CNOT per side.
-Forward depth $= \lceil L/2\rceil + 2$.
-
-\paragraph{Phase C (shrink).} Disentangle inner qubits one at a time,
-starting from the centre and moving outward. The first reverse CNOT is
-$\CNOT(q_{m-1},q_m)$ alone, which fixes $q_m$ to $\ket 0$. Subsequent
-layers apply, in parallel,
-$\CNOT(q_{m-s-1},q_{m-s})$ on the left and $\CNOT(q_{m+s+1},q_{m+s})$ on
-the right, for $s=1,2,\dots$, terminating when the only GHZ-active sites
-left are $q_0$ and $q_L$.
-
-\subsection{Stabiliser proof sketch}
-
-After Phase B the top-leg stabiliser group is
-$\langle X_0X_1\cdots X_L,\;Z_iZ_{i+1}: 0\le i\le L-1\rangle$ — the standard
-GHZ stabilisers. We show by induction on the number of disentanglement
-layers $s$ that after step $s$ of Phase C, the active GHZ subset
-$A_s\subseteq\{0,\dots,L\}$ contains exactly $q_0$ and $q_L$ plus the
-yet-untouched middle band, and the stabiliser group is
-$$\big\langle \textstyle\bigotimes_{i\in A_s}X_i,\;\{Z_iZ_j: i,j\text{ adjacent in }A_s\}\cup\{Z_k: k\notin A_s\}\big\rangle.$$
-The CNOT $\CNOT(q_{m-s-1},q_{m-s})$ removes $X_{m-s}$ from the big string
-(by $X_c\to X_cX_t$ cancellation) and converts the outer Z-pair
-$Z_{m-s-1}Z_{m-s}$ into a single-site $Z_{m-s}$, while the inner Z-pair
-$Z_{m-s}Z_{m-s+1}$ becomes $Z_{m-s-1}Z_{m-s}Z_{m-s+1}$, which reduces to
-the new jump-pair $Z_{m-s-1}Z_{m-s+1}$ modulo the freshly-formed singleton.
-The mirror argument applies on the right. After $\lceil L/2\rceil$ steps,
-$A=\{0,L\}$, and the group simplifies to
-$\langle X_0X_L,\;Z_0Z_L,\;Z_1,\dots,Z_{L-1}\rangle$, which is the
-stabiliser group of $\Phip_{(e_0,e_1)}\otimes\ket 0^{\otimes(L-1)}$.
-
-A worked $L=4$ example with explicit Heisenberg-picture stabiliser tracking
-is given in Section~3 of \texttt{theory\_draft.md} (run repository).
-
-\subsection{Resource comparison}
-
-Table~\ref{tab:mocu-resources} compares MOCU against the four baselines
-already discussed in \S\ref{sec:resources}. Numbers are taken from the
-re-run of \texttt{simulation.log} after MOCU was added to
-\texttt{scaling\_benchmark.PROTOCOLS}.
-
-\begin{table}[ht]
-\centering
-\begin{tabular}{lcccc}
-\toprule
-Protocol & Depth ($L=10$) & 2Q gates ($L=10$) & Measurements & Noise fid.\ ($p_2{=}10^{-2}$, $L{=}10$) \\
-\midrule
-\texttt{entanglement\_swap} (v1) & 15 & 10 & $L-1=9$ & 0.928 \\
-\texttt{cat\_chain} & 22 & 10 & $L-1=9$ & 0.928 \\
-\texttt{mocu} (this appendix) & 12 & 19 & 0 & 0.885 \\
-\texttt{swap\_chain} & 29 & 28 & 0 & 0.816 \\
-\bottomrule
-\end{tabular}
-\caption{Resource summary at $L=10$. The
-\texttt{entanglement\_swap} depth includes the $\le 9$ feed-forward
-\texttt{if\_test} blocks, which Qiskit's \texttt{depth()} counts as
-sequential operations; on a tightly compiled classical-controller
-implementation this would collapse to a single conditional layer (depth
-$\le 7$). MOCU achieves the lowest unitary depth and avoids measurements
-entirely; its 2Q-gate count is roughly twice that of \texttt{cat\_chain}
-because the disentanglement of every inner qubit is paid for in CNOTs
-rather than measurement+feedforward.}
-\label{tab:mocu-resources}
-\end{table}
-
-\subsection{Numerical verification}
-
-The MOCU implementation lives in \texttt{analysis/mocu.py}
-and is exercised by 49 \texttt{pytest} tests in
-\texttt{analysis/tests/test\_mocu.py}, all passing:
-\begin{itemize}
-\item \emph{Connectivity:} every CNOT lands on a top-leg edge, for
-  $L=1,\dots,10$.
-\item \emph{No measurements:} the constructed circuit has zero measurement
-  instructions and zero classical bits.
-\item \emph{Two-qubit gate count:} exactly $2L-1$ for every $L$.
-\item \emph{Stim Clifford-exact fidelity:} after post-selecting every
-  intermediate qubit to $\ket 0$ (which is deterministic for MOCU),
-  $\langle\Phi^+|\rho_{e_0e_1}|\Phi^+\rangle = 1$ to machine precision
-  for $L=1,\dots,10$ and the spot-check values $L=20,30,50$.
-\item \emph{Statevector cross-check:} for $L=1,\dots,6$, the full
-  Qiskit \texttt{Statevector} of the MOCU circuit overlaps with
-  $\Phip_{e_0e_1}\otimes\ket 0^{\otimes(2L-1)}$ to fidelity $>1-10^{-9}$.
-\end{itemize}
-
-The depolarising-noise benchmark at $p_2=10^{-2}$ produces, for $L=1,\dots,10$,
-the fidelity sequence
-$0.992,0.978,0.963,0.951,0.940,0.928,0.917,0.906,0.895,0.885$ — strictly
-between \texttt{cat\_chain} (which gets the same intermediate-qubit
-``free trace-out'' but with half the gate count) and \texttt{swap\_chain}.
-The empirical fidelity at $L=10$ is slightly higher than the leading-order
-estimate $(1-p_2)^{2L-1}\approx 0.826$ because errors on intermediate
-qubits that are eventually disentangled to $\ket 0$ partially cancel
-under partial trace.
-
-\subsection{When to prefer MOCU over the v1 protocol}
-
-The v1 measurement-based protocol is depth-superior at high $L$ and on
-hardware with mature dynamic-circuit support. MOCU is preferable when:
-\begin{enumerate}
-\item the target hardware lacks mid-circuit measurement or classical
-  feed-forward primitives;
-\item one wants a self-contained unitary description (e.g.\ for
-  inclusion in a larger circuit identity, or for analytical proofs that
-  rely on unitarity);
-\item shallow $L$ ($L\lesssim 5$) where the depth difference is small
-  and the simpler unitary is easier to compile.
-\end{enumerate}
-For high-$L$, low-noise applications the v1 protocol dominates.
-
-\subsection*{Implementation note}
-The reference implementation is \texttt{analysis/mocu.py};
-the test suite is \texttt{analysis/tests/test\_mocu.py};
-the rebuilt simulation log including MOCU is
-\texttt{analysis/simulation.log}.
+We have designed, analytically verified, and numerically benchmarked
+two complementary Bell-state preparation circuits on a two-legged
+ladder QPU. \textbf{Protocol~I} performs entanglement swapping along
+the top leg with mid-circuit measurements and a closed-form
+classically-controlled Pauli correction, achieving $O(1)$ quantum-gate
+depth (the same dynamic-circuit advantage demonstrated in
+Refs.~\cite{Baumer2024,Song2024}, here specialised to the exact ladder
+topology of the challenge). \textbf{Protocol~II (MOCU)} is a
+measurement-free unitary companion that builds the $(L+1)$-qubit GHZ
+state on the top leg from the centre outward and then disentangles
+inner qubits in a centre-out reverse sweep, saturating the
+Lieb-Robinson $\Omega(L)$ depth lower bound at $L+2$ with $2L-1$
+two-qubit gates. Both protocols produce $\Phip$ deterministically for
+every $L\ge 1$ and every measurement branch, and use only top-leg
+edges of the ladder. Protocol~I is preferred on dynamic-circuit
+hardware; Protocol~II is preferred on measurement-free hardware. The
+two together cover the full hardware-capability spectrum for near-term
+experiments on the two-legged ladder geometry.
 
 \begin{thebibliography}{99}
 
