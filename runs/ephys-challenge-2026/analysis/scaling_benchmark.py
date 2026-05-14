@@ -11,7 +11,7 @@ from qiskit import QuantumCircuit, transpile
 import cat_chain
 import cluster_ladder
 import entanglement_swap
-import mocu
+import mogu
 import swap_chain
 from validate_connectivity import validate_connectivity
 
@@ -28,7 +28,7 @@ PROTOCOLS: List[Protocol] = [
     Protocol("swap_chain", swap_chain.build_circuit, "tab:orange"),
     Protocol("cat_chain", cat_chain.build_circuit, "tab:green"),
     Protocol("cluster_ladder", cluster_ladder.build_circuit, "tab:red"),
-    Protocol("mocu", mocu.build_circuit, "tab:purple"),
+    Protocol("mogu", mogu.build_circuit, "tab:purple"),
 ]
 
 
@@ -126,7 +126,7 @@ def noise_benchmark(L_range: List[int], p_2q: float = 1e-2, shots: int = 4096) -
     import numpy as np
 
     # All protocols except cluster_ladder (whose stretch-goal correction map
-    # is incomplete; see final_review_v1.md). MOCU (added in v2) is included.
+    # is incomplete; see final_review_v1.md). MOGU (added in v2) is included.
     NOISE_PROTOCOLS = [p for p in PROTOCOLS if p.name != "cluster_ladder"]
     results: Dict[str, Dict[int, float]] = {p.name: {} for p in NOISE_PROTOCOLS}
 

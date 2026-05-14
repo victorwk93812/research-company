@@ -4,7 +4,7 @@ Outputs (in ``analysis/figures/``):
 
   * ``circuit_swap_L5.pdf``  — the v1 entanglement-swap protocol at the
     challenge example ``L=5`` (``N=4`` interior top-leg qubits).
-  * ``circuit_mocu_L5.pdf``  — the v2 measurement-free MOCU protocol at the
+  * ``circuit_mogu_L5.pdf``  — the v2 measurement-free MOGU protocol at the
     same ``L=5`` example.
 
 We draw the circuits using qiskit's matplotlib backend with ``idle_wires=False``
@@ -24,7 +24,7 @@ from qiskit.visualization import circuit_drawer
 
 from entanglement_swap import _top_chain
 from ladder_graph import qidx
-import mocu
+import mogu
 
 
 def _topleg_swap_L5() -> QuantumCircuit:
@@ -70,10 +70,10 @@ def _topleg_swap_L5() -> QuantumCircuit:
     return qc
 
 
-def _topleg_mocu(L: int) -> QuantumCircuit:
-    """Top-leg-only redraw of MOCU at length ``L``.
+def _topleg_mogu(L: int) -> QuantumCircuit:
+    """Top-leg-only redraw of MOGU at length ``L``.
 
-    Mirrors :func:`mocu.build_circuit` but on a register of size ``L+1`` so the
+    Mirrors :func:`mogu.build_circuit` but on a register of size ``L+1`` so the
     figure only shows the active qubits ``q0=e0, q1, ..., q_{L-1}, qL=e1``.
     """
     qr = QuantumRegister(L + 1, "q")
@@ -141,11 +141,11 @@ def main() -> None:
     swap = _topleg_swap_L5()
     _save(swap, out / "circuit_swap_L5.pdf", scale=0.75)
 
-    mocu_qc = _topleg_mocu(5)
-    _save(mocu_qc, out / "circuit_mocu_L5.pdf", scale=0.85)
+    mogu_qc = _topleg_mogu(5)
+    _save(mogu_qc, out / "circuit_mogu_L5.pdf", scale=0.85)
 
     print("wrote", out / "circuit_swap_L5.pdf")
-    print("wrote", out / "circuit_mocu_L5.pdf")
+    print("wrote", out / "circuit_mogu_L5.pdf")
 
 
 if __name__ == "__main__":

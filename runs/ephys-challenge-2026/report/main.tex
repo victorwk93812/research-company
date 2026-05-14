@@ -69,7 +69,7 @@ gate depth is a constant ($\le 7$) independent of $L$, with $N+1$ or
 $N+2$ two-qubit gates and $N=L-1$ measurements. The even-$N$ case
 generalises the 1993 Żukowski-Zeilinger primitive; the odd case is
 handled by a single 3-qubit GHZ link at one end of the chain.
-\textbf{Protocol II (Middle-Out Cat-Uncompute, unitary).} A
+\textbf{Protocol II (Middle-Out GHZ-Uncompute, unitary).} A
 measurement-free companion that builds the $(L+1)$-qubit GHZ on the top
 leg from the centre outward, then disentangles the intermediate qubits
 in a centre-out reverse sweep. The total depth is $L+2$, with $2L-1$
@@ -80,7 +80,7 @@ by stabiliser-formalism induction and verified to fidelity $>1-10^{-9}$
 by exact \texttt{Statevector} and \texttt{stim} simulation for
 $L\in\{1,\dots,10\}$ (with $L=20,30,50$ spot-checks). Under a
 two-qubit depolarising error rate $p_2=10^{-2}$ at $L=10$, Protocol I
-achieves Bell fidelity $0.928$, MOCU achieves $0.885$, and the
+achieves Bell fidelity $0.928$, MOGU achieves $0.885$, and the
 SWAP-chain baseline degrades to $0.816$. Protocol I is preferable on
 hardware with mature dynamic-circuit primitives; Protocol II is the
 depth-best choice on hardware lacking mid-circuit measurement and
@@ -143,8 +143,8 @@ optimal in a different operational regime.
   Pauli correction make this protocol $O(1)$-depth, independent of $L$.
   It is the depth-best choice on hardware with mature dynamic-circuit
   primitives.
-\item \textbf{Protocol II — Middle-Out Cat-Uncompute (MOCU)}
-  (\S\ref{sec:mocu}). A measurement-free, fully unitary alternative that
+\item \textbf{Protocol II — Middle-Out GHZ-Uncompute (MOGU)}
+  (\S\ref{sec:mogu}). A measurement-free, fully unitary alternative that
   saturates the $\Omega(L)$ Lieb-Robinson lower bound for unitary
   nearest-neighbour 1D circuits at depth $L+2$. It is the depth-best
   choice on hardware without mid-circuit measurement and feed-forward.
@@ -187,7 +187,7 @@ Fig.~\ref{fig:ladder} (Protocol~I).
 every $L$, including an explicit resolution of the odd-$N$ parity
 obstruction using a single GHZ-3 link, requiring no rungs and no
 bottom-leg qubits.
-(c) A measurement-free companion (Protocol~II / MOCU) saturating the
+(c) A measurement-free companion (Protocol~II / MOGU) saturating the
 Lieb-Robinson bound at depth $L+2$, again entirely on the top leg, with
 a stabiliser-formalism correctness proof.
 (d) A side-by-side numerical and noise-model benchmark of both protocols
@@ -395,8 +395,8 @@ on a tightly-compiled classical controller).
 \label{fig:circuit-swap}
 \end{figure}
 
-\section{Protocol II: Middle-Out Cat-Uncompute (measurement-free)}
-\label{sec:mocu}
+\section{Protocol II: Middle-Out GHZ-Uncompute (measurement-free)}
+\label{sec:mogu}
 
 \subsection{Motivation: the Lieb-Robinson tax}
 
@@ -405,7 +405,7 @@ mid-circuit measurement and classical feed-forward. We add here a fully
 \emph{unitary}, measurement-free variant. Any unitary protocol composed
 of nearest-neighbour gates on a 1D chain must have depth
 $\Omega(L)$ to produce entanglement across $L$ edges (Lieb-Robinson
-light-cone). Our Middle-Out Cat-Uncompute (MOCU) saturates this bound
+light-cone). Our Middle-Out GHZ-Uncompute (MOGU) saturates this bound
 at $L+2$, with $2L-1$ two-qubit gates and zero measurements.
 
 \subsection{Construction}
@@ -429,8 +429,8 @@ $\CNOT(q_{m+s+1},q_{m+s})$ on the right, for $s=1,2,\dots$, terminating
 when only $q_0$ and $q_L$ remain in the active GHZ.
 
 \paragraph{Remark on parallelisation.}
-\label{par:mocu-parallel}
-The reference implementation in \texttt{analysis/mocu.py} executes
+\label{par:mogu-parallel}
+The reference implementation in \texttt{analysis/mogu.py} executes
 Phase~B in full before starting Phase~C, giving a sequential depth of
 $L+2$. This schedule is not optimal: Phase~C only requires the inner
 GHZ structure that the early layers of Phase~B have already produced,
@@ -460,9 +460,9 @@ to a small additive constant.
 
 We do not implement this aggressive schedule in the current submission
 — the sequential schedule is simpler to verify, and the
-correctness proof of \S\ref{sec:mocu} carries over verbatim — but it
+correctness proof of \S\ref{sec:mogu} carries over verbatim — but it
 is a free constant-factor speedup for any future hardware deployment
-of MOCU.
+of MOGU.
 
 \subsection{Stabiliser proof sketch}
 
@@ -495,7 +495,7 @@ repository).
 
 \subsection{Circuit diagram for the $L=5$ example}
 
-Fig.~\ref{fig:circuit-mocu} shows the explicit MOCU circuit for $L=5$
+Fig.~\ref{fig:circuit-mogu} shows the explicit MOGU circuit for $L=5$
 (matching the challenge example). The Hadamard on the middle qubit
 $q_2$ is followed by a balanced fan-out of CNOTs; the barrier marks
 the transition between forward and reverse sweeps; the centre-out
@@ -504,8 +504,8 @@ is on a top-leg edge.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.78\textwidth]{../analysis/figures/circuit_mocu_L5.pdf}
-\caption{Protocol~II (MOCU) on the $L=5$ ladder. Wires
+\includegraphics[width=0.78\textwidth]{../analysis/figures/circuit_mogu_L5.pdf}
+\caption{Protocol~II (MOGU) on the $L=5$ ladder. Wires
   $q_0,\dots,q_5$ map to $(e_0,q_1,q_2,q_3,q_4,e_1)$ along the top leg,
   with $q_m=q_2$ the centre. Phases: A — Hadamard on $q_2$; B — solo
   $\CNOT(q_2,q_3)$ then two parallel layers expanding outward to build
@@ -514,7 +514,7 @@ is on a top-leg edge.
   $\Phip$ and the four interior qubits in $\ket 0$. Depth $L+2=7$,
   $2L-1=9$ CNOTs, zero measurements. Generated by
   \texttt{analysis/draw\_circuits.py}.}
-\label{fig:circuit-mocu}
+\label{fig:circuit-mogu}
 \end{figure}
 
 \section{Resource scaling and benchmarks}
@@ -538,7 +538,7 @@ the empirical noise fidelity at $p_2=10^{-2}$.
   \midrule
   Protocol I, $N$ even (swap) & $N+1$ & $N+1$ & $N$ & 2 & 5 & 6\\
   Protocol I, $N$ odd (swap)  & $N+1$ & $N+2$ & $N$ & 2 & 6 & 7\\
-  Protocol II (MOCU)          & 1     & $2L-1$ & 0 & 0 & $L+2^{\dagger}$ & $L+2^{\dagger}$\\
+  Protocol II (MOGU)          & 1     & $2L-1$ & 0 & 0 & $L+2^{\dagger}$ & $L+2^{\dagger}$\\
   \midrule
   SWAP chain (baseline) & 1 & $3N+1$ & 0 & 0 & $3N+2$ & $3N+2$\\
   Cat-then-disentangle (baseline) & $N+2$ & $N+1$ & $N$ & 1 & $N+2$ & $N+3$\\
@@ -553,11 +553,11 @@ the empirical noise fidelity at $p_2=10^{-2}$.
   depth without measurements. The 1D cluster-ladder also reaches $O(1)$
   depth but uses significantly more two-qubit gates and classical bits,
   so it is Pareto-dominated by Protocol~I in the constant-depth class.
-  $^{\dagger}$The MOCU figure is the sequential-schedule depth implemented
-  in \texttt{analysis/mocu.py}; with aggressive interleaving of Phase~B
+  $^{\dagger}$The MOGU figure is the sequential-schedule depth implemented
+  in \texttt{analysis/mogu.py}; with aggressive interleaving of Phase~B
   and Phase~C, the achievable depth drops to roughly $\lceil L/2\rceil+4$
   (even $L$) or $\lceil L/2\rceil+3$ (odd $L$) — see the parallelisation
-  remark in \S\ref{sec:mocu}.}
+  remark in \S\ref{sec:mogu}.}
 \label{tab:resources}
 \end{table}
 
@@ -571,7 +571,7 @@ Protocol & Depth ($L=10$) & 2Q gates ($L=10$) & Measurements & Noise fid.\ ($p_2
 \midrule
 \texttt{entanglement\_swap} (Prot.~I) & 15 & 10 & $L-1=9$ & 0.928 \\
 \texttt{cat\_chain} (baseline) & 22 & 10 & $L-1=9$ & 0.928 \\
-\texttt{mocu} (Prot.~II)       & 12 & 19 & 0 & 0.885 \\
+\texttt{mogu} (Prot.~II)       & 12 & 19 & 0 & 0.885 \\
 \texttt{swap\_chain} (baseline) & 29 & 28 & 0 & 0.816 \\
 \bottomrule
 \end{tabular}
@@ -580,7 +580,7 @@ Protocol & Depth ($L=10$) & 2Q gates ($L=10$) & Measurements & Noise fid.\ ($p_2
   depth includes the $\le 9$ feed-forward \texttt{if\_test} blocks,
   which Qiskit's \texttt{depth()} counts as sequential operations; on a
   tightly compiled classical-controller implementation this would
-  collapse to a single conditional layer (depth $\le 7$). MOCU's
+  collapse to a single conditional layer (depth $\le 7$). MOGU's
   19~CNOTs are roughly twice that of \texttt{cat\_chain} because every
   inner-qubit disentanglement is paid for in CNOTs rather than
   measurement+feedforward. The $L=10$ Bell fidelities are obtained from
@@ -621,7 +621,7 @@ applied to every $\CNOT$, we simulate ${10^4}$ shots in Qiskit's
 \texttt{AerSimulator}. Fig.~\ref{fig:noise} shows the empirical Bell
 fidelity as a function of $L$. Protocol~I and \texttt{cat\_chain} share
 the same fidelity curve (both have $L-1$ inner qubits that get traced
-out / measured, attenuating their accumulated noise); MOCU sits between
+out / measured, attenuating their accumulated noise); MOGU sits between
 them and \texttt{swap\_chain} because its $2L-1$ CNOTs are paid in
 unitary noise but the partial-trace over disentangled intermediates
 still cancels much of it.
@@ -649,7 +649,7 @@ still cancels much of it.
 \begin{enumerate}
 \item \textbf{Analytical.} The stabiliser-formalism derivations of
   \S\ref{sec:N4} (Protocol~I, $N=4$), \S\ref{sec:swap-general}
-  (Protocol~I, $N=3$), and \S\ref{sec:mocu} (Protocol~II) establish
+  (Protocol~I, $N=3$), and \S\ref{sec:mogu} (Protocol~II) establish
   correctness on the relevant small cases; Theorem~\ref{thm:even} and
   the analogous odd-$N$ induction cover all $L$ for Protocol~I; the
   centre-out induction covers all $L$ for Protocol~II.
@@ -692,7 +692,7 @@ Quantum-gate depth is constant; the depth penalty for feed-forward is
 small on a tightly-compiled classical controller. Bell fidelity
 remains $\ge 0.92$ in the noise benchmark up to $L=10$.
 
-\paragraph{Protocol II (MOCU).} Preferred when:
+\paragraph{Protocol II (MOGU).} Preferred when:
 \begin{enumerate}
 \item the target hardware lacks mid-circuit measurement or classical
   feed-forward primitives (e.g.\ neutral-atom or trapped-ion platforms
@@ -717,7 +717,7 @@ with \texttt{uv}. Key entry points:
 \begin{itemize}
 \item \texttt{analysis/entanglement\_swap.py} — Protocol~I dynamic
   circuit with feed-forward.
-\item \texttt{analysis/mocu.py} — Protocol~II unitary middle-out
+\item \texttt{analysis/mogu.py} — Protocol~II unitary middle-out
   cat-uncompute circuit.
 \item \texttt{analysis/swap\_chain.py} — SWAP-chain baseline.
 \item \texttt{analysis/cat\_chain.py} — GHZ-cat-disentangle baseline.
@@ -728,7 +728,7 @@ with \texttt{uv}. Key entry points:
 \item \texttt{analysis/scaling\_benchmark.py} — sweep of $L$ and plot
   generation.
 \item \texttt{analysis/draw\_circuits.py} — generates
-  Figs.~\ref{fig:circuit-swap} and~\ref{fig:circuit-mocu}.
+  Figs.~\ref{fig:circuit-swap} and~\ref{fig:circuit-mogu}.
 \item \texttt{analysis/validate\_connectivity.py} — edge-list validator.
 \item \texttt{analysis/tests/} — 132 \texttt{pytest} unit tests across
   both protocols and the feed-forward correction map.
@@ -764,7 +764,7 @@ directory.
 
 The scope of AI use is: (i) drafting all written content under human
 direction; (ii) producing the Qiskit code according to the theoretical
-specifications in \S\ref{sec:swap} and \S\ref{sec:mocu}; (iii) running
+specifications in \S\ref{sec:swap} and \S\ref{sec:mogu}; (iii) running
 and logging the verification simulations. All stabiliser derivations
 were independently re-derived by at least two of the personas, and all
 mathematical claims are numerically verified in
@@ -782,7 +782,7 @@ the top leg with mid-circuit measurements and a closed-form
 classically-controlled Pauli correction, achieving $O(1)$ quantum-gate
 depth (the same dynamic-circuit advantage demonstrated in
 Refs.~\cite{Baumer2024,Song2024}, here specialised to the exact ladder
-topology of the challenge). \textbf{Protocol~II (MOCU)} is a
+topology of the challenge). \textbf{Protocol~II (MOGU)} is a
 measurement-free unitary companion that builds the $(L+1)$-qubit GHZ
 state on the top leg from the centre outward and then disentangles
 inner qubits in a centre-out reverse sweep, saturating the

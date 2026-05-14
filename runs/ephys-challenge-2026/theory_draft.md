@@ -1,4 +1,4 @@
-# Middle-Out Cat-Uncompute (MOCU): A Measurement-Free Bell-State Preparation Protocol on the Ladder QPU
+# Middle-Out GHZ-Uncompute (MOGU): A Measurement-Free Bell-State Preparation Protocol on the Ladder QPU
 
 *Phase 1 v2 research note — Lead Theoretical Researcher.*
 *Companion to the v1 protocol (entanglement swapping with measurement +
@@ -36,7 +36,7 @@ two qubits separated by `L` edges of the top leg requires **at least
 break this bound (LOCC is non-local in time), which is what enables the
 v1 protocol's `O(1)` depth.
 
-The MOCU protocol is the depth-optimal *unitary* construction: it
+The MOGU protocol is the depth-optimal *unitary* construction: it
 saturates the Lieb-Robinson bound up to a small constant. Specifically,
 the protocol has depth `≈ L + 2`, two-qubit-gate count `2L − 1`, and
 zero measurements — a strict improvement over `swap_chain` (which costs
@@ -86,7 +86,7 @@ $$\text{CNOT}(c,t):\quad X_c \mapsto X_c X_t,\;\; X_t \mapsto X_t,\;\; Z_c \maps
 
 ---
 
-## 2. The MOCU protocol — explicit construction
+## 2. The MOGU protocol — explicit construction
 
 The protocol is a pair of nested sweeps, **Forward** and **Reverse**.
 Both sweeps act only on top-leg qubits. After completion, every two-qubit
@@ -209,7 +209,7 @@ Forward sweep: every top-leg edge is touched exactly once, giving $L$
 CNOTs. Reverse sweep: every inner qubit is disentangled once, giving
 $L - 1$ CNOTs. Total $2L - 1$ two-qubit gates.
 
-| Quantity | MOCU | swap_chain | cat_chain | entanglement_swap |
+| Quantity | MOGU | swap_chain | cat_chain | entanglement_swap |
 |---|---|---|---|---|
 | Depth | $L + 2$ | $3L + 1$ | $L + 2$ | $\le 7$ (with FF) |
 | 2Q gates | $2L - 1$ | $3L$ | $L$ | $L + 2 \cdot \lfloor L/2 \rfloor$ |
@@ -220,7 +220,7 @@ $L - 1$ CNOTs. Total $2L - 1$ two-qubit gates.
 
 (`cat_chain` 2Q-gate count is $L$ for the forward GHZ cascade only;
 intermediate qubits are then **measured**, not disentangled by CNOTs,
-hence the lower count. MOCU pays $L−1$ extra CNOTs to do the disentangle
+hence the lower count. MOGU pays $L−1$ extra CNOTs to do the disentangle
 unitarily.)
 
 ---
@@ -298,13 +298,13 @@ Total depth for $L = 4$: 6 = $L + 2$. ✓
 
 For $L \to \infty$:
 
-| Quantity | MOCU | swap_chain | cat_chain | entanglement_swap |
+| Quantity | MOGU | swap_chain | cat_chain | entanglement_swap |
 |---|---|---|---|---|
 | Depth | $L + O(1)$ | $3L$ | $L + O(1)$ | $O(1)$ |
 | 2Q gates | $2L - 1$ | $3L$ | $L$ | $\Theta(L)$ |
 | Mid-circuit measurements | 0 | 0 | $L - 1$ | $L - 1$ |
 
-MOCU's **pure unitarity** is its distinguishing feature: it requires no
+MOGU's **pure unitarity** is its distinguishing feature: it requires no
 measurement, no classical communication, and no feed-forward — only
 nearest-neighbour H and CNOT.
 
@@ -312,18 +312,18 @@ nearest-neighbour H and CNOT.
 
 Under depolarising noise with two-qubit error rate $p_2$, the Bell-state
 fidelity is, to leading order,
-$$F_\text{MOCU} \;\approx\; (1 - p_2)^{2L - 1} \;\approx\; 1 - (2L-1) p_2.$$
+$$F_\text{MOGU} \;\approx\; (1 - p_2)^{2L - 1} \;\approx\; 1 - (2L-1) p_2.$$
 
-For $L = 10$, $p_2 = 10^{-2}$: $F_\text{MOCU} \approx 1 - 0.19 = 0.81$.
+For $L = 10$, $p_2 = 10^{-2}$: $F_\text{MOGU} \approx 1 - 0.19 = 0.81$.
 Compare:
 - swap_chain: $F \approx (1-p_2)^{3L} = 0.74$ at $L = 10$.
 - entanglement_swap (v1): $F \approx (1-p_2)^{12} = 0.886$ at $L = 10$.
 - cat_chain: $F \approx (1-p_2)^L = 0.90$ at $L = 10$.
 
-So MOCU is **between** swap_chain and cat_chain in noise robustness, and
+So MOGU is **between** swap_chain and cat_chain in noise robustness, and
 both are dominated by the v1 measurement-based protocol's `O(1)`-depth
 result. This is the price of unitarity, and it should be reported
-honestly. The selling point of MOCU is **simplicity and hardware
+honestly. The selling point of MOGU is **simplicity and hardware
 universality**, not noise robustness.
 
 ---
@@ -343,7 +343,7 @@ overhead, but the saving on both forward and reverse sweeps is a factor
 of two:
 $$d_\text{end-start} = 2L + O(1) \quad \text{vs} \quad d_\text{middle-out} = L + O(1).$$
 
-This factor-of-two saving is what makes MOCU competitive with the
+This factor-of-two saving is what makes MOGU competitive with the
 measurement-based `cat_chain` on depth, while remaining strictly
 unitary. (cat_chain's depth is also $\sim L$ because its disentangle
 phase consists of $L-1$ measurement+correction operations on **disjoint**
@@ -354,13 +354,13 @@ classical bits and mid-circuit measurement support.)
 
 ## 6. Summary and deliverables to engineering
 
-The MOCU protocol is a **deterministic, measurement-free, depth-$(L+2)$,
+The MOGU protocol is a **deterministic, measurement-free, depth-$(L+2)$,
 $(2L-1)$-CNOT** circuit that prepares $|\Phi^+\rangle$ on the two
 far-end qubits of a top-leg chain on a ladder QPU. The stabiliser-formalism
 proof of correctness is given above; for the engineering verification,
 the natural targets are:
 
-1. Implement `mocu.build_circuit(L)` returning a Qiskit
+1. Implement `mogu.build_circuit(L)` returning a Qiskit
    `QuantumCircuit` with the gate schedule of §2.1–§2.2.
 2. Verify `validate_connectivity(qc, L) == True` for $L = 1, …, 10$.
 3. Verify Bell-fidelity $= 1$ exactly via `stim` (Clifford simulation)

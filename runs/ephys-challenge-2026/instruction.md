@@ -10,7 +10,7 @@ The user has proposed the following idea:
 > entanglement further site-by-site until the boundaries, and then sweep
 > back to cancel the entanglements."
 
-This is a **Middle-Out Cat-Uncompute (MOCU)** protocol: a unitary
+This is a **Middle-Out GHZ-Uncompute (MOGU)** protocol: a unitary
 analogue of `cat_chain` (which uses X-basis measurements), with the
 extra optimisation that the GHZ is grown **from the centre** so the
 forward sweep depth is `≈⌈L/2⌉ + 2` instead of `L + 1`. The reverse
@@ -51,7 +51,7 @@ infrastructure for an honest side-by-side comparison.
 
 ---
 
-# The MOCU Protocol — Definition
+# The MOGU Protocol — Definition
 
 Top-leg qubits: `q_0 = e0, q_1, q_2, ..., q_{L-1}, q_L = e1` (so `L+1`
 qubits). Choose middle `m = ⌊L/2⌋`.
@@ -142,10 +142,10 @@ clean inductive proof in `theory_draft.md` (Phase 1 deliverable).
   this; reuse it.
 
 ## V2-T3 — Engineering
-- Implement `mocu.py` (or `unitary_chain.py`) under `./analysis/`
+- Implement `mogu.py` (or `unitary_chain.py`) under `./analysis/`
   with `build_circuit(L) -> QuantumCircuit`. **Do not modify**
   existing files; add a new module.
-- Add unit tests under `./analysis/tests/test_mocu.py`:
+- Add unit tests under `./analysis/tests/test_mogu.py`:
   - Connectivity check for `L = 1..10`.
   - Exact Bell-fidelity = 1 via stim Clifford simulation for `L = 1..10`
     and spot checks at `L = 20, 30, 50`.
@@ -174,15 +174,15 @@ clean inductive proof in `theory_draft.md` (Phase 1 deliverable).
 Standard 5-phase company workflow. Follow `../../personas/*.md`.
 
 1. **Phase 1 (Researcher)** → `./theory_draft.md`. Stabiliser proof of
-   the MOCU protocol for arbitrary `L`. Compare gate count, depth,
+   the MOGU protocol for arbitrary `L`. Compare gate count, depth,
    measurement count vs v1, swap_chain, cat_chain.
 2. **Phase 2 (RA Skeptic)** → `./ra_critique.md`. Pedantic check of
    stabiliser propagation. Loop with Phase 1 until approval.
 3. **Phase 3 (LaTeX Writer)** → append a new section to
-   `./report/main.tex` ("§ A. Measurement-Free Variant — MOCU").
+   `./report/main.tex` ("§ A. Measurement-Free Variant — MOGU").
    Recompile `./report/main.pdf`.
-4. **Phase 4 (Python Engineer)** → `./analysis/mocu.py` +
-   `./analysis/tests/test_mocu.py` + register protocol in
+4. **Phase 4 (Python Engineer)** → `./analysis/mogu.py` +
+   `./analysis/tests/test_mogu.py` + register protocol in
    `scaling_benchmark.py`. Re-run `main.py`, log to
    `./analysis/simulation.log`.
 5. **Phase 5 (Review Board)** → `./final_review.md`.
@@ -201,7 +201,7 @@ Standard 5-phase company workflow. Follow `../../personas/*.md`.
   `stim_verification.py`, `resource_limits.py` should all work for the
   new protocol with no changes — register a new entry in the
   `PROTOCOLS` list and existing harnesses pick it up.
-- **Clifford-only.** The MOCU protocol uses only `H` and `CNOT`, so
+- **Clifford-only.** The MOGU protocol uses only `H` and `CNOT`, so
   stim simulation is exact and fast for any `L`.
 
 ---
@@ -210,8 +210,8 @@ Standard 5-phase company workflow. Follow `../../personas/*.md`.
 
 The v2 run is complete if:
 
-1. The MOCU protocol is proven stabiliser-correct for arbitrary `L`.
-2. `test_mocu.py` passes for `L = 1..10` with Bell-fidelity = 1
+1. The MOGU protocol is proven stabiliser-correct for arbitrary `L`.
+2. `test_mogu.py` passes for `L = 1..10` with Bell-fidelity = 1
    (machine precision via stim).
 3. The new protocol is benchmarked side-by-side with the four existing
    baselines for depth, 2Q-gate count, and noise-fidelity at

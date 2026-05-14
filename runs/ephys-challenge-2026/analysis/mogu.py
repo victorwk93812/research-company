@@ -1,4 +1,4 @@
-"""Middle-Out Cat-Uncompute (MOCU): a measurement-free Bell-state preparation
+"""Middle-Out GHZ-Uncompute (MOGU): a measurement-free Bell-state preparation
 on the ladder QPU's top leg.
 
 See `../theory_draft.md` for the stabiliser-formalism proof.
@@ -28,7 +28,7 @@ def build_circuit(L: int) -> QuantumCircuit:
         raise ValueError("L must be >= 1")
 
     qr = QuantumRegister(n_qubits(L), "q")
-    qc = QuantumCircuit(qr, name=f"mocu_L{L}")
+    qc = QuantumCircuit(qr, name=f"mogu_L{L}")
 
     chain = _top_chain(L)
 

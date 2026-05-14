@@ -1,4 +1,4 @@
-"""Tests for the MOCU (Middle-Out Cat-Uncompute) measurement-free protocol.
+"""Tests for the MOGU (Middle-Out GHZ-Uncompute) measurement-free protocol.
 
 Verifications:
   - Connectivity: every CNOT lands on a top-leg edge.
@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 import stim
 
-import mocu
+import mogu
 from entanglement_swap import _top_chain
 from ladder_graph import n_qubits
 from validate_connectivity import validate_connectivity
@@ -28,7 +28,7 @@ from validate_connectivity import validate_connectivity
 
 @pytest.mark.parametrize("L", list(range(1, 11)))
 def test_connectivity(L):
-    qc = mocu.build_circuit(L)
+    qc = mogu.build_circuit(L)
     validate_connectivity(qc, L)
 
 
@@ -36,12 +36,12 @@ def test_connectivity(L):
 
 @pytest.mark.parametrize("L", list(range(1, 11)))
 def test_no_measurements(L):
-    qc = mocu.build_circuit(L)
+    qc = mogu.build_circuit(L)
     n_meas = sum(1 for instr in qc.data if instr.operation.name == "measure")
-    assert n_meas == 0, f"MOCU L={L} contains {n_meas} measurements; expected 0"
+    assert n_meas == 0, f"MOGU L={L} contains {n_meas} measurements; expected 0"
     n_classical = qc.num_clbits
     assert n_classical == 0, (
-        f"MOCU L={L} declared {n_classical} classical bits; expected 0"
+        f"MOGU L={L} declared {n_classical} classical bits; expected 0"
     )
 
 
@@ -49,21 +49,21 @@ def test_no_measurements(L):
 
 @pytest.mark.parametrize("L", list(range(1, 11)))
 def test_two_qubit_gate_count(L):
-    qc = mocu.build_circuit(L)
+    qc = mogu.build_circuit(L)
     n_2q = sum(
         1 for instr in qc.data
         if instr.operation.name in {"cx", "cz", "swap"}
     )
     expected = 2 * L - 1 if L >= 1 else 0
     assert n_2q == expected, (
-        f"MOCU L={L} expected 2L-1={expected} 2Q gates, got {n_2q}"
+        f"MOGU L={L} expected 2L-1={expected} 2Q gates, got {n_2q}"
     )
 
 
 # ---------- Stim Clifford-exact fidelity ----------
 
-def _build_mocu_in_stim(L: int) -> stim.Circuit:
-    """Replay mocu.build_circuit(L) in a stim.Circuit (Clifford only)."""
+def _build_mogu_in_stim(L: int) -> stim.Circuit:
+    """Replay mogu.build_circuit(L) in a stim.Circuit (Clifford only)."""
     chain = _top_chain(L)
     circ = stim.Circuit()
 
@@ -121,12 +121,12 @@ def _phi_plus_fidelity_stim(L: int) -> float:
     chain = _top_chain(L)
     e0, e1 = chain[0], chain[-1]
     n = n_qubits(L)
-    circ = _build_mocu_in_stim(L)
+    circ = _build_mogu_in_stim(L)
     sim = stim.TableauSimulator()
     sim.do(circ)
 
     # Postselect every intermediate top-leg qubit to |0> (must succeed if
-    # MOCU is correct).
+    # MOGU is correct).
     for k in range(1, L):
         sim.postselect_z(chain[k], desired_value=0)
 
@@ -139,13 +139,13 @@ def _phi_plus_fidelity_stim(L: int) -> float:
 @pytest.mark.parametrize("L", list(range(1, 11)))
 def test_stim_exact_fidelity(L):
     fid = _phi_plus_fidelity_stim(L)
-    assert fid > 1 - 1e-9, f"MOCU L={L} stim fidelity {fid} below threshold"
+    assert fid > 1 - 1e-9, f"MOGU L={L} stim fidelity {fid} below threshold"
 
 
 @pytest.mark.parametrize("L", [20, 30, 50])
 def test_stim_large_L_spot(L):
     fid = _phi_plus_fidelity_stim(L)
-    assert fid > 1 - 1e-9, f"MOCU L={L} large-L stim fidelity {fid} below threshold"
+    assert fid > 1 - 1e-9, f"MOGU L={L} large-L stim fidelity {fid} below threshold"
 
 
 # ---------- Statevector cross-check ----------
@@ -156,7 +156,7 @@ def test_statevector_fidelity(L):
     Statevector, marginalise to (e_0, e_1), and check |Phi+> fidelity."""
     from qiskit.quantum_info import Statevector
 
-    qc = mocu.build_circuit(L)
+    qc = mogu.build_circuit(L)
     sv = Statevector.from_instruction(qc)
     chain = _top_chain(L)
     e0, e1 = chain[0], chain[-1]
@@ -178,15 +178,15 @@ def test_statevector_fidelity(L):
     target = Statevector(psi)
 
     fid = abs(sv.inner(target)) ** 2
-    assert fid > 1 - 1e-9, f"MOCU L={L} statevector fidelity {fid} below threshold"
+    assert fid > 1 - 1e-9, f"MOGU L={L} statevector fidelity {fid} below threshold"
 
 
 # ---------- Run as script ----------
 
 if __name__ == "__main__":
-    print("MOCU connectivity:")
+    print("MOGU connectivity:")
     for L in range(1, 11):
-        qc = mocu.build_circuit(L)
+        qc = mogu.build_circuit(L)
         validate_connectivity(qc, L)
         print(f"  L={L:2d}: ok, depth={qc.depth()}, 2Q gates={sum(1 for i in qc.data if i.operation.name in {'cx','cz','swap'})}")
     print("\nStim fidelity:")
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     print("\nStatevector cross-check:")
     from qiskit.quantum_info import Statevector
     for L in range(1, 7):
-        qc = mocu.build_circuit(L)
+        qc = mogu.build_circuit(L)
         sv = Statevector.from_instruction(qc)
         chain = _top_chain(L)
         e0, e1 = chain[0], chain[-1]

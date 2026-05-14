@@ -1,4 +1,4 @@
-# Final Review — Phase 5 v2 (MOCU Protocol Addition)
+# Final Review — Phase 5 v2 (MOGU Protocol Addition)
 
 *Three-reviewer audit of the v2 measurement-free protocol added to the
 2026 NCCU Institute of Applied Physics submission.*
@@ -18,9 +18,9 @@ in v2 — competition-ready as of 2026-04-23.
 
 ### Scope of review
 
-I re-derived the MOCU stabiliser propagation by hand for $L=4$ and
+I re-derived the MOGU stabiliser propagation by hand for $L=4$ and
 cross-checked against the stim trace from
-`tests/test_mocu.py::test_stim_exact_fidelity`.
+`tests/test_mogu.py::test_stim_exact_fidelity`.
 
 ### Findings
 
@@ -50,7 +50,7 @@ cross-checked against the stim trace from
    confirm the final reduction
    $\{X_0 X_4, Z_0 Z_4, Z_1, Z_2, Z_3\}$. ✔
 4. **§3.3 (Boundary cases $L=1, 2, 3$).** All three small-$L$ recipes
-   are correctly handled by `mocu.build_circuit`, as verified by the
+   are correctly handled by `mogu.build_circuit`, as verified by the
    stim sweep for $L = 1, \dots, 10$ (Bell fidelity $= 1$ to machine
    precision). ✔
 5. **§4 (Resource analysis).** Depth $= L + 2$ upper bound is correct;
@@ -58,7 +58,7 @@ cross-checked against the stim trace from
    for odd $L$ (because the reverse-sweep solo CNOT and the first
    parallel pair can interleave with the forward sweep's last layer
    without violating the stabiliser invariants). 2Q-gate count $2L - 1$
-   matches `tests/test_mocu.py::test_two_qubit_gate_count` exactly. ✔
+   matches `tests/test_mogu.py::test_two_qubit_gate_count` exactly. ✔
 6. **Appendix in `main.tex`.** Same content as `theory_draft.md`,
    appropriately compressed for the LaTeX surface. The appendix
    compiles cleanly with `xelatex` (12 pages total report, up from 9).
@@ -67,7 +67,7 @@ cross-checked against the stim trace from
 
 ### Verdict (Math Pedant)
 
-All MOCU mathematical claims are correct; the proof is internally
+All MOGU mathematical claims are correct; the proof is internally
 consistent after RA Flaw 1 (mis-stated Z-pair conjugation rule) was
 fixed; the worked $L = 4$ example reproduces the target stabiliser
 group exactly; and the stim test suite cross-validates every claim
@@ -75,7 +75,7 @@ numerically. **PASS.**
 
 ---
 
-## 2. The Performance Hacker (`./analysis/mocu.py` + tests)
+## 2. The Performance Hacker (`./analysis/mogu.py` + tests)
 
 ### Scope of review
 
@@ -87,7 +87,7 @@ numerically. **PASS.**
 
 ### Findings
 
-1. **Module structure.** `mocu.py` (76 lines) imports `_top_chain` from
+1. **Module structure.** `mogu.py` (76 lines) imports `_top_chain` from
    `entanglement_swap` and `n_qubits` from `ladder_graph` — reusing
    existing infrastructure, no duplication. The single public
    `build_circuit(L)` function returns a Qiskit `QuantumCircuit` with
@@ -113,12 +113,12 @@ numerically. **PASS.**
    $= 1$ to machine precision via Qiskit's `Statevector` simulator.
    This is independent of the stim path. ✔
 8. **Noise sweep integration.** `scaling_benchmark.PROTOCOLS` now
-   includes MOCU as a fifth protocol (purple); the `noise_benchmark`
+   includes MOGU as a fifth protocol (purple); the `noise_benchmark`
    helper has been extended to skip only `cluster_ladder` (whose v1
    correction map is incomplete). The full re-run produces the
    updated `simulation.log` with per-$L$ noise fidelities for all
    four working protocols. ✔
-9. **Test count.** The MOCU test file adds 49 tests
+9. **Test count.** The MOGU test file adds 49 tests
    (10 connectivity + 10 no-measurement + 10 gate-count
    + 10 stim-exact + 3 large-$L$ stim + 6 statevector). All passing.
    Combined with the v1 test suite (83 tests), the project now has
@@ -126,7 +126,7 @@ numerically. **PASS.**
 
 ### Minor non-blocking observations
 
-- `mocu.py` does not invoke `resource_limits` directly; this is fine
+- `mogu.py` does not invoke `resource_limits` directly; this is fine
   because the test runner and `main.py` import it once at the top of
   the executable entry point, so the limits are inherited.
 - The barrier between forward and reverse sweeps is decorative —
@@ -145,14 +145,14 @@ additive. **PASS.**
 
 ### Scope of review
 
-- Does the new MOCU protocol respect the competition's connectivity
+- Does the new MOGU protocol respect the competition's connectivity
   constraints (top-leg only)?
 - Is the noise-fidelity behaviour physically reasonable?
 - Does the v2 work preserve the v1 submission bundle?
 
 ### Findings
 
-1. **Connectivity.** MOCU touches only top-leg edges — no rungs, no
+1. **Connectivity.** MOGU touches only top-leg edges — no rungs, no
    bottom-leg gates. This satisfies the challenge's allowed-edge
    set trivially. ✔
 2. **Noise behaviour.** At $p_2 = 10^{-2}$ depolarising noise on every
@@ -163,8 +163,8 @@ additive. **PASS.**
    - Compare: `entanglement_swap` (v1) $0.928$, `cat_chain` $0.928$,
      `swap_chain` $0.816$.
 
-   The MOCU result sits where the heuristic predicts (between
-   `cat_chain` and `swap_chain` because MOCU has the cat-chain's
+   The MOGU result sits where the heuristic predicts (between
+   `cat_chain` and `swap_chain` because MOGU has the cat-chain's
    trace-out advantage on intermediates but pays for $L - 1$ extra
    CNOTs on the disentangle). The empirical $0.885$ is slightly above
    the leading-order $(1 - p_2)^{2L-1} = 0.826$ because errors on
@@ -182,7 +182,7 @@ additive. **PASS.**
 
 ### Verdict (Domain Expert)
 
-The MOCU addition is a physically meaningful, technically sound, and
+The MOGU addition is a physically meaningful, technically sound, and
 honestly framed unitary alternative to the v1 protocol. It strengthens
 the report's "we considered the alternatives" story without
 compromising the v1 submission. **PASS.**
@@ -201,9 +201,9 @@ All three reviewers: **PASS.**
 | RA critique | `./ra_critique.md` | ✔ Replaces v1; v1 archived to `ra_critique_v1.md` |
 | Report (with appendix) | `./report/main.pdf` (12 pp.) | ✔ Recompiled |
 | Report source | `./report/main.tex` | ✔ Appendix added |
-| Implementation | `./analysis/mocu.py` | ✔ 76 lines |
-| Tests | `./analysis/tests/test_mocu.py` | ✔ 49 tests, all passing |
-| Scaling/noise | `./analysis/scaling_benchmark.py` | ✔ MOCU registered |
+| Implementation | `./analysis/mogu.py` | ✔ 76 lines |
+| Tests | `./analysis/tests/test_mogu.py` | ✔ 49 tests, all passing |
+| Scaling/noise | `./analysis/scaling_benchmark.py` | ✔ MOGU registered |
 | Simulation log | `./analysis/simulation.log` | ✔ v1 archived to `simulation_v1.log` |
 | Final review | `./final_review.md` (this file) | ✔ |
 
@@ -213,10 +213,10 @@ All three reviewers: **PASS.**
 |---|---|---|---|---|
 | `entanglement_swap` (v1, with FF) | 15 | 10 | 9 | 0.928 |
 | `cat_chain` (with measurement) | 22 | 10 | 9 | 0.928 |
-| **`mocu` (v2, unitary)** | **12** | **19** | **0** | **0.885** |
+| **`mogu` (v2, unitary)** | **12** | **19** | **0** | **0.885** |
 | `swap_chain` (unitary baseline) | 29 | 28 | 0 | 0.816 |
 
-MOCU achieves the lowest depth among the unitary protocols and avoids
+MOGU achieves the lowest depth among the unitary protocols and avoids
 all measurement; the price is roughly twice the 2Q-gate count of
 `cat_chain` (because every disentanglement is paid for in CNOTs rather
 than measurement+feedforward), and the noise fidelity sits between the
@@ -239,10 +239,10 @@ strengthens the technical story by:
 
 ### Optional follow-ups (not blocking)
 
-- A T1/T2 decoherence noise model would make MOCU's depth disadvantage
+- A T1/T2 decoherence noise model would make MOGU's depth disadvantage
   vs the v1 protocol numerically explicit (the depolarising channel
   used here is depth-blind under the partial-trace convention).
-- Extend stim spot-checks for MOCU to $L = 100, 200$ for parity with
+- Extend stim spot-checks for MOGU to $L = 100, 200$ for parity with
   the v1 large-$L$ check.
 - Re-package `./submission/` with the v2 appendix included if the
   organisers issue a request for a revised submission. (Not initiated

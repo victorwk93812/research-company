@@ -1,4 +1,4 @@
-# RA Critique — Phase 2 v2 (MOCU Protocol)
+# RA Critique — Phase 2 v2 (MOGU Protocol)
 
 *Critical Research Assistant review of `./theory_draft.md` (v2).*
 
@@ -21,7 +21,7 @@ rely on:
 3. My own working memory of textbook quantum-information results
    (Nielsen & Chuang Ch. 10; Gottesman thesis Ch. 6).
 
-The MOCU protocol is, as the Researcher honestly states, **not new
+The MOGU protocol is, as the Researcher honestly states, **not new
 physics** — it is the textbook unitary cat-and-uncompute pattern with a
 specific middle-out scheduling. The novelty lies entirely in the
 explicit application to the ladder-QPU problem and the integration into
@@ -31,13 +31,13 @@ and accurate. **No load-bearing prior art is misrepresented.**
 I checked the v1-bibliography papers to confirm:
 - Bäumer et al. 2308.13065 use measurement + feed-forward and explicitly
   contrast their dynamic-circuit protocol against unitary CNOT chains
-  (i.e. against exactly the family MOCU belongs to). The trade-off
+  (i.e. against exactly the family MOGU belongs to). The trade-off
   framing in §1 of `theory_draft.md` (LOCC breaks Lieb–Robinson, hence
-  the v1 protocol's `O(1)` depth vs MOCU's `Ω(L)` depth) is a faithful
+  the v1 protocol's `O(1)` depth vs MOGU's `Ω(L)` depth) is a faithful
   rendition of Bäumer et al.'s argument.
 - Pham–Svore arXiv:1207.6655 likewise depend on measurement + feed-forward
   for `O(1)`-depth long-range entanglement on a 2D grid; the unitary
-  light-cone bound that MOCU saturates is a textbook Lieb–Robinson
+  light-cone bound that MOGU saturates is a textbook Lieb–Robinson
   result not in dispute.
 
 **Verdict on literature:** PASS. No missing prior art has been found.
@@ -132,7 +132,7 @@ The `swap_chain` value of $3L$ is the standard SWAP-decomposes-to-3-CNOTs
 counting; the actual `swap_chain.py` implementation uses Qiskit's
 native SWAP, which the existing `count_resources` in
 `scaling_benchmark.py` counts as a single 2Q gate. So the plotted curves
-will show MOCU at $2L - 1$ and SWAP-chain at $L$ — *visually misleading*
+will show MOGU at $2L - 1$ and SWAP-chain at $L$ — *visually misleading*
 unless we either (i) decompose the SWAPs to CNOTs before counting, or
 (ii) clearly label the axis as "2Q gates including SWAP".
 
@@ -147,7 +147,7 @@ metric is being compared.
 
 ### Flaw 6 — the noise-fidelity heuristic is a leading-order estimate only
 
-§4.1 estimates $F_\text{MOCU} \approx (1 - p_2)^{2L-1}$ under depolarising
+§4.1 estimates $F_\text{MOGU} \approx (1 - p_2)^{2L-1}$ under depolarising
 noise on every CNOT. This is a leading-order approximation that ignores
 (i) error coherence (sometimes errors cancel, e.g. two Pauli-Z errors on
 the same line), and (ii) the partial-trace structure of the final
@@ -184,7 +184,7 @@ clean, the worked example is consistent, and the resource analysis is
 honest. Flaws 2, 3, 5, 6 are non-blocking notes for the engineering
 phase to verify against the actual implementation.
 
-The MOCU protocol as specified will (i) produce $|\Phi^+\rangle$ between
+The MOGU protocol as specified will (i) produce $|\Phi^+\rangle$ between
 $e_0$ and $e_1$, (ii) leave all intermediate top-leg qubits in $|0\rangle$,
 (iii) use only top-leg nearest-neighbour CNOT and single-qubit $H$,
 (iv) achieve depth $L + O(1)$ and CNOT count $2L - 1$, (v) be exactly
