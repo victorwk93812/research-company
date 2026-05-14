@@ -98,14 +98,25 @@ def register_qr_canonical() -> None:
 
     # Other tenax modules imported _compute_projector_tensor by name at
     # module-load time, so they hold their own references that our patch
-    # above does NOT update.  Rebind those references too.
-    from tenax.algorithms import (
-        _ctm_tensor as _t,
-        _ctm_tensor_moves as _tm,
-        _ctm_tensor_paired_moves as _tp,
-        _split_ctm_tensor_moves as _sm,
+    # above does NOT update.  Rebind those references too.  After PR #341
+    # / PR #342 in tenax, the set of modules that pull the symbol by name
+    # grew (compiled-moves path, c4v helper, split-CTM wrapper); enumerate
+    # all current importers via grep and rebind every one.
+    _module_names = (
+        "_ctm_tensor",
+        "_ctm_tensor_moves",
+        "_ctm_tensor_paired_moves",
+        "_ctm_tensor_c4v",
+        "_ctm_compiled_moves",
+        "_split_ctm_tensor",
+        "_split_ctm_tensor_moves",
     )
-    for _mod in (_t, _tm, _tp, _sm):
+    import importlib
+    for _name in _module_names:
+        try:
+            _mod = importlib.import_module(f"tenax.algorithms.{_name}")
+        except ImportError:
+            continue
         if hasattr(_mod, "_compute_projector_tensor"):
             _mod._compute_projector_tensor = _patched
 

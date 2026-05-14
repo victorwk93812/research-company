@@ -1,0 +1,32 @@
+grid_label: phase8b_explicit_ad
+budget_minutes: 90
+num_steps_default: 8
+chi_default: 16
+D_default: 2
+
+# Phase-8b: explicit unrolled AD (gs_implicit_ad=False) to bypass the
+# new-tenax implicit-adjoint NaN regression at chi >= 12.  This gives a
+# proper apples-to-apples SVD vs QR-canonical comparison at chi=16, 8
+# AD steps, 2 seeds.
+#
+# Diagnosis chain that justified this run:
+#   chi=4:  implicit AD descends, E=-0.6298 (4 steps)
+#   chi=8:  implicit AD descends, E=-0.6466 (SVD), -0.6394 (QR)
+#   chi=12: implicit AD stalls; grad_norm NaN, line search rejects all alpha
+#   chi=16: implicit AD stalls (same)
+#   chi=16 + gs_implicit_ad=False: descends to E=-0.6334
+#
+# TFIM 1x1 cells are NOT included here -- they don't suffer the implicit
+# adjoint NaN (Phase-8 SVD got proper -3.10 and -3.57); QR-canonical
+# fails for separate scope-limit reason (P_1=P_2 single-projector form
+# wrong for 1-site) and that doesn't change with implicit/explicit AD.
+
+cells:
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: false, gs_implicit_ad: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: false, gs_implicit_ad: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: false, gs_implicit_ad: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: false, gs_implicit_ad: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: false, gs_implicit_ad: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: false, gs_implicit_ad: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}

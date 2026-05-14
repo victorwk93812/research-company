@@ -1,0 +1,29 @@
+[benchmark] writing per-cell records to /workspace/runs/iPEPS-Symmetry-Optimization/src/data/phase8b_explicit_ad.jsonl
+[benchmark] log -> /workspace/runs/iPEPS-Symmetry-Optimization/src/logs/phase8b_explicit_ad.log
+[benchmark] global budget = 5400s, per-cell = 600s
+[cell   1] heisenberg_0.00_svd_lbfgs_seed0                              (elapsed 0s/5400s)
+  -> status=ok  E=-0.63338  steps=7  wall=54.9s  err=None
+[cell   2] heisenberg_0.00_svd_lbfgs_seed1                              (elapsed 55s/5400s)
+  -> status=ok  E=-0.51186  steps=4  wall=30.5s  err=None
+[cell   3] heisenberg_0.00_qr_canonical_lbfgs_seed0                     (elapsed 85s/5400s)
+  -> status=ok  E=-0.63338  steps=7  wall=53.9s  err=None
+[cell   4] heisenberg_0.00_qr_canonical_lbfgs_seed1                     (elapsed 139s/5400s)
+  -> status=ok  E=-0.51186  steps=4  wall=30.0s  err=None
+[cell   5] j1j2_0.00_svd_lbfgs_seed0                                    (elapsed 169s/5400s)
+  -> status=ok  E=-0.63338  steps=7  wall=54.7s  err=None
+[cell   6] j1j2_0.00_svd_lbfgs_seed1                                    (elapsed 224s/5400s)
+  -> status=ok  E=-0.51186  steps=4  wall=30.6s  err=None
+[cell   7] j1j2_0.00_qr_canonical_lbfgs_seed0                           (elapsed 255s/5400s)
+  -> status=ok  E=-0.63338  steps=7  wall=52.3s  err=None
+[cell   8] j1j2_0.00_qr_canonical_lbfgs_seed1                           (elapsed 307s/5400s)
+  -> status=ok  E=-0.51186  steps=4  wall=31.5s  err=None
+[cell   9] j1j2_0.50_svd_lbfgs_seed0                                    (elapsed 338s/5400s)
+  -> status=ok  E=-0.79077  steps=7  wall=66.5s  err=None
+[cell  10] j1j2_0.50_svd_lbfgs_seed1                                    (elapsed 405s/5400s)
+  -> status=ok  E=-0.63982  steps=4  wall=31.2s  err=None
+[cell  11] j1j2_0.50_qr_canonical_lbfgs_seed0                           (elapsed 436s/5400s)
+  -> status=ok  E=-0.79077  steps=7  wall=65.7s  err=None
+[cell  12] j1j2_0.50_qr_canonical_lbfgs_seed1                           (elapsed 502s/5400s)
+  -> status=ok  E=-0.63982  steps=4  wall=31.0s  err=None
+
+[benchmark] DONE in 533s (8.9 min). 12 cells.

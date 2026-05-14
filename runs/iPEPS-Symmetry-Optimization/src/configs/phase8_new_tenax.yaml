@@ -1,0 +1,56 @@
+grid_label: phase8_new_tenax
+budget_minutes: 240
+num_steps_default: 8
+chi_default: 16
+D_default: 2
+
+# Phase-8: re-run on rebased tenax (post-PR #341 / #342 / #343 / #346).
+# Harness corrections in this phase:
+#   - gs_conv_tol = 1e-15 (was 1e-7) so gs_num_steps is the real budget.
+#   - SVD: gs_implicit_ad=True (Python-loop CTM + JIT-fused GMRES VJP).
+#   - QR-canonical: gs_implicit_ad=False (the new tenax implicit-AD
+#     validator rejects projector_method != 'svd').
+#   - 2-site C4v parametrisation (gs_c4v=True) for Heisenberg + J1-J2 so
+#     the tenax sublattice rotation B = iσ^y · A is in effect.
+#   - 1×1 unit cell for TFIM (no sublattice; gs_c4v=False).
+#   - chi_extrap=[8,16,24] re-evaluates E_CTM on the converged tensor.
+#
+# su_init policy:
+#   - Main grid uses random init (su_init=False), matching Phase-7's
+#     known-good harness — that gave E=-0.65 in 8 AD steps.
+#   - Below we add a small su_init=True diagnostic subset for Heisenberg
+#     and J1-J2(0.5) only, to document the "SU plateau" issue: tenax
+#     2-site C4v cannot use noise stall recovery (incompatible with C4v
+#     coefficient params), so the AD path stalls at the SU output.
+
+cells:
+  # ---------- Main: random init (matches Phase-7) ----------
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  # 2x2 RQ5 at J1-J2(0.5): SVD/QR x plain/metric LBFGS
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: true,  gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: true,  gs_c4v: true,  su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  # TFIM 1x1 (no sublattice)
+  - {model: tfim, h_or_J2: 2.5,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: false, su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 2.5,  ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: false, su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.04, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: false, su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.04, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: false, su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.5,  ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: false, su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+  - {model: tfim, h_or_J2: 3.5,  ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: false, su_init: false, chi_extrap: [8, 16, 24], seeds: [0, 1]}
+
+  # ---------- SU-init diagnostic subset (Heisenberg + J1-J2(0.5) only) ----
+  # Documents the SU-plateau effect: AD stalls at ~ -0.50 / -0.62 because
+  # the SU output is an exact stationary point of the chi-truncated
+  # functional; with gs_conv_tol=1e-15 we now run the full 8 steps but
+  # the energy doesn't actually move much.
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: true, chi_extrap: [8, 16, 24], seeds: [0]}
+  - {model: heisenberg, h_or_J2: 0.0, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: true, chi_extrap: [8, 16, 24], seeds: [0]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: svd,          optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: true, chi_extrap: [8, 16, 24], seeds: [0]}
+  - {model: j1j2, h_or_J2: 0.5, ctmrg_mode: qr_canonical, optimizer: lbfgs, metric_precond: false, gs_c4v: true, su_init: true, chi_extrap: [8, 16, 24], seeds: [0]}

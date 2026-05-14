@@ -1,0 +1,28 @@
+[finalize-phase8b] waiting for Phase-8b benchmark to finish...
+[finalize-phase8b] benchmark done; running analysis + tables
+[analysis] loaded 12 rows; 12 ok
+/workspace/runs/iPEPS-Symmetry-Optimization/src/analysis.py:133: RuntimeWarning: Mean of empty slice
+  f"{np.nanmean(G):.3e},{np.nanstd(G):.3e},"
+/workspace/runs/iPEPS-Symmetry-Optimization/src/.venv/lib/python3.11/site-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+[analysis] wrote /workspace/runs/iPEPS-Symmetry-Optimization/src/data/phase8b_explicit_ad_summary.csv
+[analysis] wrote 15 figures to /workspace/runs/iPEPS-Symmetry-Optimization/src/figures
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_traj_heisenberg_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_grad_heisenberg_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_traj_j1j2_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_grad_j1j2_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_traj_j1j2_0.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_grad_j1j2_0.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_traj_tfim_2.50_EMPTY.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_grad_tfim_2.50_EMPTY.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_traj_tfim_3.04_EMPTY.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_grad_tfim_3.04_EMPTY.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_traj_tfim_3.50_EMPTY.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_grad_tfim_3.50_EMPTY.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_2x2_interaction.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_wallclock.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8b_explicit_ad_chi_extrap.pdf
+[tables] loaded 12 rows from phase8b_explicit_ad{,_remediation}.jsonl
+[tables] wrote /workspace/runs/iPEPS-Symmetry-Optimization/report/tables/summary_table.tex
+[tables] wrote /workspace/runs/iPEPS-Symmetry-Optimization/report/tables/opt_x_mode.tex
+[finalize-phase8b] wrote /workspace/runs/iPEPS-Symmetry-Optimization/phase8b_status.md with 12 cells

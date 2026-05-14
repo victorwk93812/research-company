@@ -1,0 +1,69 @@
+[benchmark] writing per-cell records to /workspace/runs/iPEPS-Symmetry-Optimization/src/data/phase8_new_tenax.jsonl
+[benchmark] log -> /workspace/runs/iPEPS-Symmetry-Optimization/src/logs/phase8_new_tenax.log
+[benchmark] global budget = 14400s, per-cell = 600s
+[cell   1] heisenberg_0.00_svd_lbfgs_seed0                              (elapsed 0s/14400s)
+  -> status=ok  E=-0.51339  steps=3  wall=28.7s  err=None
+[cell   2] heisenberg_0.00_svd_lbfgs_seed1                              (elapsed 29s/14400s)
+  -> status=ok  E=-0.52262  steps=2  wall=23.4s  err=None
+[cell   3] heisenberg_0.00_qr_canonical_lbfgs_seed0                     (elapsed 52s/14400s)
+  -> status=ok  E=-0.51339  steps=3  wall=27.4s  err=None
+[cell   4] heisenberg_0.00_qr_canonical_lbfgs_seed1                     (elapsed 79s/14400s)
+  -> status=ok  E=-0.52262  steps=3  wall=27.0s  err=None
+[cell   5] j1j2_0.00_svd_lbfgs_seed0                                    (elapsed 106s/14400s)
+  -> status=ok  E=-0.51339  steps=3  wall=28.6s  err=None
+[cell   6] j1j2_0.00_svd_lbfgs_seed1                                    (elapsed 135s/14400s)
+  -> status=ok  E=-0.52262  steps=2  wall=24.0s  err=None
+[cell   7] j1j2_0.00_qr_canonical_lbfgs_seed0                           (elapsed 159s/14400s)
+  -> status=ok  E=-0.51339  steps=3  wall=26.7s  err=None
+[cell   8] j1j2_0.00_qr_canonical_lbfgs_seed1                           (elapsed 186s/14400s)
+  -> status=ok  E=-0.52262  steps=3  wall=27.7s  err=None
+[cell   9] j1j2_0.50_svd_lbfgs_seed0                                    (elapsed 213s/14400s)
+  -> status=ok  E=-0.64173  steps=3  wall=26.8s  err=None
+[cell  10] j1j2_0.50_svd_lbfgs_seed1                                    (elapsed 240s/14400s)
+  -> status=ok  E=-0.65328  steps=2  wall=24.6s  err=None
+[cell  11] j1j2_0.50_qr_canonical_lbfgs_seed0                           (elapsed 265s/14400s)
+  -> status=ok  E=-0.64173  steps=3  wall=27.1s  err=None
+[cell  12] j1j2_0.50_qr_canonical_lbfgs_seed1                           (elapsed 292s/14400s)
+  -> status=ok  E=-0.65328  steps=3  wall=26.2s  err=None
+[cell  13] j1j2_0.50_svd_lbfgs_metric_seed0                             (elapsed 318s/14400s)
+  -> status=ok  E=-0.64173  steps=3  wall=26.8s  err=None
+[cell  14] j1j2_0.50_svd_lbfgs_metric_seed1                             (elapsed 345s/14400s)
+  -> status=ok  E=-0.65328  steps=2  wall=23.7s  err=None
+[cell  15] j1j2_0.50_qr_canonical_lbfgs_metric_seed0                    (elapsed 368s/14400s)
+  -> status=ok  E=-0.64173  steps=3  wall=24.7s  err=None
+[cell  16] j1j2_0.50_qr_canonical_lbfgs_metric_seed1                    (elapsed 393s/14400s)
+  -> status=ok  E=-0.65328  steps=3  wall=25.6s  err=None
+[cell  17] tfim_2.50_svd_lbfgs_seed0                                    (elapsed 419s/14400s)
+  -> status=subprocess_error  E=+nan  steps=0  wall=283.3s  err=rc=134; stderr="terminate called after throwing an instance of 'std::bad_alloc'\n  what():  std::bad_alloc\n"
+[cell  18] tfim_2.50_svd_lbfgs_seed1                                    (elapsed 702s/14400s)
+  -> status=error  E=-2.68628  steps=8  wall=118.7s  err=post-CTM check failed: KeyError('bottom')
+[cell  19] tfim_2.50_qr_canonical_lbfgs_seed0                           (elapsed 821s/14400s)
+  -> status=error  E=-1.33925  steps=8  wall=172.7s  err=post-CTM check failed: KeyError('bottom')
+[cell  20] tfim_2.50_qr_canonical_lbfgs_seed1                           (elapsed 993s/14400s)
+  -> status=ok  E=-1.64932  steps=8  wall=113.1s  err=None
+[cell  21] tfim_3.04_svd_lbfgs_seed0                                    (elapsed 1107s/14400s)
+  -> status=subprocess_error  E=+nan  steps=0  wall=260.7s  err=rc=134; stderr='E0511 03:30:29.193131   23755 contiguous_section_memory_manager.cc:101] allocateMappedMemory failed with error: Cannot allocate memory\nE0511 03:30:29.193148   23755 contiguous_section_memory_manager.cc:139] Failed to satisfy suballocation request for 88\nLLVM ERROR: Unable to allocate section memory!\n'
+[cell  22] tfim_3.04_svd_lbfgs_seed1                                    (elapsed 1367s/14400s)
+  -> status=ok  E=-3.10994  steps=8  wall=137.0s  err=None
+[cell  23] tfim_3.04_qr_canonical_lbfgs_seed0                           (elapsed 1504s/14400s)
+  -> status=ok  E=-0.18527  steps=8  wall=94.4s  err=None
+[cell  24] tfim_3.04_qr_canonical_lbfgs_seed1                           (elapsed 1599s/14400s)
+  -> status=ok  E=-2.00998  steps=8  wall=87.3s  err=None
+[cell  25] tfim_3.50_svd_lbfgs_seed0                                    (elapsed 1686s/14400s)
+  -> status=subprocess_error  E=+nan  steps=0  wall=267.0s  err=rc=134; stderr="terminate called after throwing an instance of 'std::bad_alloc'\n  what():  std::bad_alloc\n"
+[cell  26] tfim_3.50_svd_lbfgs_seed1                                    (elapsed 1953s/14400s)
+  -> status=ok  E=-3.57383  steps=8  wall=159.6s  err=None
+[cell  27] tfim_3.50_qr_canonical_lbfgs_seed0                           (elapsed 2113s/14400s)
+  -> status=ok  E=-0.07556  steps=8  wall=111.9s  err=None
+[cell  28] tfim_3.50_qr_canonical_lbfgs_seed1                           (elapsed 2225s/14400s)
+  -> status=ok  E=-1.79874  steps=8  wall=92.9s  err=None
+[cell  29] heisenberg_0.00_svd_lbfgs_seed0                              (elapsed 2317s/14400s)
+  -> status=ok  E=-0.50127  steps=2  wall=25.7s  err=None
+[cell  30] heisenberg_0.00_qr_canonical_lbfgs_seed0                     (elapsed 2343s/14400s)
+  -> status=ok  E=-0.50127  steps=3  wall=27.9s  err=None
+[cell  31] j1j2_0.50_svd_lbfgs_seed0                                    (elapsed 2371s/14400s)
+  -> status=ok  E=-0.62559  steps=2  wall=25.6s  err=None
+[cell  32] j1j2_0.50_qr_canonical_lbfgs_seed0                           (elapsed 2397s/14400s)
+  -> status=ok  E=-0.62559  steps=3  wall=28.4s  err=None
+
+[benchmark] DONE in 2425s (40.4 min). 32 cells.

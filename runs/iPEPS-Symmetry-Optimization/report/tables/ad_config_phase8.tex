@@ -1,0 +1,58 @@
+\begin{tabular}{l l p{0.45\linewidth}}
+\toprule
+parameter & value & note (Phase-7 $\to$ Phase-8 delta) \\
+\midrule
+\multicolumn{3}{l}{\emph{CTMConfig}} \\
+\code{chi}                       & 16                    & --- \\
+\code{max\_iter}                 & 80                    & --- \\
+\code{min\_iter}                 & 10                    & --- \\
+\code{conv\_tol}                 & $5\!\times\!10^{-7}$  & --- \\
+\code{renormalize}               & \texttt{True}         & --- \\
+\code{projector\_method}         & \{svd, qr\_canonical\} & --- \\
+\code{projector\_backward}       & lorentzian (svd) / auto (qr) & --- \\
+\code{ad\_regularize\_svd}       & \texttt{True}         & --- \\
+\code{ad\_backward\_method}      & vjp                   & --- \\
+\code{gmres\_tol}                & $10^{-6}$             & --- \\
+\code{gmres\_restart}            & 20                    & --- \\
+\code{gmres\_maxiter}            & 200                   & PR \#343: now honoured \\
+\code{gmres\_precondition}       & \texttt{False}        & --- \\
+\code{adjoint\_solver}           & bicgstab              & --- \\
+\code{adjoint\_maxiter}          & 50                    & --- \\
+\code{adjoint\_tol}              & $10^{-8}$             & --- \\
+\code{adjoint\_tikhonov}         & $10^{-6}$             & --- \\
+\code{adjoint\_arnoldi\_precheck}& \texttt{True}         & --- \\
+\code{adjoint\_arnoldi\_threshold} & 5.0                 & --- \\
+\code{forward\_gauge}            & phase                 & PR \#343: silent promotion dropped \\
+\code{ctm\_ad\_mode}             & \texttt{None}         & --- \\
+\code{ctm\_conv\_method}         & elementwise           & --- \\
+\code{qr\_warmup\_steps}         & 3                     & only used by built-in \code{"qr"} \\
+\code{chi\_auto\_bump}           & \texttt{False}        & --- \\
+\midrule
+\multicolumn{3}{l}{\emph{iPEPSConfig}} \\
+\code{max\_bond\_dim} ($D$)      & 2                     & --- \\
+\code{unit\_cell}                & 2site (Heis/J1J2) / 1x1 (TFIM) & --- \\
+\code{su\_init}                  & \texttt{False} (main); \texttt{True} (4-cell diag) & Phase-8: \emph{audited} \\
+\code{num\_imaginary\_steps}     & 100                   & SU step count (only if \code{su\_init=True}) \\
+\code{dt}                        & 0.01                  & SU time step \\
+\code{gate\_order}               & sequential            & --- \\
+\code{gs\_implicit\_ad}          & \texttt{(ctmrg\_mode == 'svd')} & PR \#346: validator forces this \\
+\code{gs\_optimizer}             & lbfgs                 & --- \\
+\code{gs\_num\_steps}            & 8                     & --- \\
+\code{gs\_learning\_rate}        & $10^{-3}$             & --- \\
+\code{gs\_conv\_tol}             & $10^{-15}$            & \textbf{Phase-8 change}: was $10^{-7}$ in Phase-7; the tighter value disables the early-stop heuristic so \code{gs\_num\_steps} is the real budget \\
+\code{gs\_max\_grad\_norm}       & 2.0                   & --- \\
+\code{gs\_line\_search}          & \texttt{None} (auto)  & --- \\
+\code{gs\_line\_search\_max\_steps} & 8                  & --- \\
+\code{gs\_line\_search\_method}  & hager\_zhang          & --- \\
+\code{gs\_metric\_precond}       & \texttt{(metric\_flag and lbfgs)} & Rader, arXiv:2511.09546 \\
+\code{metric\_gmres\_maxiter}    & 30                    & --- \\
+\code{metric\_gmres\_tol}        & $10^{-2}$             & --- \\
+\code{gs\_c4v}                   & \texttt{True} (Heis/J1J2) / \texttt{False} (TFIM) & sublattice rotation $B = e^{i\pi\sigma^y/2}\!\cdot\!A$ \\
+\code{gs\_projector\_method}     & \texttt{None}         & inherit from \code{ctm.projector\_method} \\
+\code{gs\_stall\_recovery}       & "reset" (c4v) / \texttt{None} (else) & noise recovery incompatible with c4v 2-site \\
+\code{gs\_noise\_recovery\_retries} & 3                  & --- \\
+\code{gs\_noise\_amplitude}      & 0.1                   & --- \\
+\code{gs\_energy\_floor}         & \texttt{None}         & we sanity-check post-hoc \\
+\code{return\_history}           & \texttt{False}        & --- \\
+\bottomrule
+\end{tabular}

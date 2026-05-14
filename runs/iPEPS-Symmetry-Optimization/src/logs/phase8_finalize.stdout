@@ -1,0 +1,28 @@
+[finalize-phase8] waiting for Phase-8 benchmark to finish...
+[finalize-phase8] benchmark done; running analysis + tables
+[analysis] loaded 28 rows; 23 ok
+/workspace/runs/iPEPS-Symmetry-Optimization/src/analysis.py:133: RuntimeWarning: Mean of empty slice
+  f"{np.nanmean(G):.3e},{np.nanstd(G):.3e},"
+/workspace/runs/iPEPS-Symmetry-Optimization/src/.venv/lib/python3.11/site-packages/numpy/lib/_nanfunctions_impl.py:1997: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+[analysis] wrote /workspace/runs/iPEPS-Symmetry-Optimization/src/data/phase8_new_tenax_summary.csv
+[analysis] wrote 15 figures to /workspace/runs/iPEPS-Symmetry-Optimization/src/figures
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_traj_heisenberg_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_grad_heisenberg_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_traj_j1j2_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_grad_j1j2_0.00.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_traj_j1j2_0.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_grad_j1j2_0.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_traj_tfim_2.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_grad_tfim_2.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_traj_tfim_3.04.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_grad_tfim_3.04.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_traj_tfim_3.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_grad_tfim_3.50.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_2x2_interaction.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_wallclock.pdf
+   /workspace/runs/iPEPS-Symmetry-Optimization/src/figures/phase8_new_tenax_chi_extrap.pdf
+[tables] loaded 28 rows from phase8_new_tenax{,_remediation}.jsonl
+[tables] wrote /workspace/runs/iPEPS-Symmetry-Optimization/report/tables/summary_table.tex
+[tables] wrote /workspace/runs/iPEPS-Symmetry-Optimization/report/tables/opt_x_mode.tex
+[finalize-phase8] wrote /workspace/runs/iPEPS-Symmetry-Optimization/phase8_status.md with 32 cells

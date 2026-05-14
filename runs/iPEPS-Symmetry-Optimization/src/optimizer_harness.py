@@ -82,6 +82,7 @@ class CellResult:
             "error": self.error,
             "energies": list(self.energies),
             "grad_norms": list(self.grad_norms),
+            "delta_energies": list(self.delta_energies),
             "step_times": list(self.step_times),
             "ctm_converged_post": self.ctm_converged_post,
             "ctm_iterations_post": self.ctm_iterations_post,
@@ -101,27 +102,66 @@ def _build_config(
     num_steps: int,
     metric_precond: bool,
     gs_c4v: bool = False,
+    su_init: bool = True,
+    gs_implicit_ad: bool | None = None,
 ) -> iPEPSConfig:
     """Map our orthogonal axes to a fully-spec'd iPEPSConfig.
 
-    Phase-7: ``gs_c4v=True`` enables the C4v sublattice-rotation parametrisation
+    Phase-7+: ``gs_c4v=True`` enables the C4v sublattice-rotation parametrisation
     (single coefficient vector $c$ for $A$ in a C4v basis, $B$ derived as
     $U_{\\sigma^y/2}A$). This is required for variational correctness on the
     2-site path at $\\chi<16$; tenax issue #328.
+
+    Phase-8 (post-PR #341 / #342 / #343 tenax rebase): every AD parameter
+    that influences the implicit-diff CTM backward, the projector backward,
+    or the optimiser is set explicitly here so that the run is fully
+    reproducible against future tenax default drifts.
+
+    On ``su_init`` and ``gs_conv_tol``: the simple-update warm-start is
+    deterministic and lands the system on a *stationary point of the
+    chi-truncated functional*; gradient-norm ~ 1e-10 trips the AD
+    convergence check after 1-2 steps without any actual optimisation
+    happening (see tenax/ipeps_optimize.py:L103 for the documented
+    1-site C4v workaround via noise injection).  The 2-site C4v path
+    cannot use noise injection (incompatible with the C4v coefficient
+    parametrisation), so we drop ``gs_conv_tol`` to ``1e-15`` and rely on
+    ``gs_num_steps`` as the actual budget.
     """
-    # ``svd`` is the Francuz baseline; ``qr_canonical`` is our new mode;
-    # ``eigh`` kept available for ablations.
     projector_method = ctmrg_mode
 
+    # --- CTM (forward + AD backward) --- explicit on every knob ---
     ctm = CTMConfig(
         chi=chi,
         max_iter=80,
+        min_iter=10,
         conv_tol=5e-7,
+        renormalize=True,
         projector_method=projector_method,
+        # Lorentzian eigh-backward is honoured even for non-eigh forwards
+        # (no-op when forward != eigh); for SVD the dedicated SVD backward
+        # is already Lorentzian-regularized via ad_regularize_svd.
         projector_backward="lorentzian" if ctmrg_mode == "svd" else "auto",
-        forward_gauge="phase",
-        ad_backward_method="vjp",
+        ad_regularize_svd=True,
+        # Implicit-AD is the new default but post-PR #346 tenax enforces
+        # ``projector_method == "svd"`` on that path (see ipeps_ad_policy.
+        # validate_ctm_for_implicit_ad).  We honour the validator: SVD uses
+        # implicit AD, QR-canonical falls back to explicit (unrolled) AD.
+        ad_backward_method="vjp",        # the regression-covered Neumann VJP
+        gmres_tol=1e-6,
+        gmres_restart=20,
+        gmres_maxiter=200,
+        gmres_precondition=False,
+        adjoint_solver="bicgstab",
+        adjoint_maxiter=50,
+        adjoint_tol=1e-8,
+        adjoint_tikhonov=1e-6,
+        adjoint_arnoldi_precheck=True,
+        adjoint_arnoldi_threshold=5.0,
+        forward_gauge="phase",           # works for both 1-site and 2-site
+        ctm_ad_mode=None,
         ctm_conv_method="elementwise",
+        qr_warmup_steps=3,               # only used by projector_method="qr"
+        chi_auto_bump=False,             # we drive chi explicitly via configs
         verbose=False,
     )
 
@@ -129,19 +169,53 @@ def _build_config(
         max_bond_dim=D,
         ctm=ctm,
         unit_cell=unit_cell,
+        # --- simple-update warm start (tenax production default) ---
+        su_init=su_init,
+        num_imaginary_steps=100,
+        dt=0.01,
+        gate_order="sequential",
+        # --- AD path ---
+        # Implicit AD requires projector_method='svd' in the new tenax;
+        # for QR-canonical we must use the explicit (unrolled) path.
+        # Also: at chi >= 12 the new-tenax implicit-AD adjoint produces
+        # NaN gradients on the 2-site C4v path (Phase-8 finding); the
+        # workaround is gs_implicit_ad=False even for SVD.  Cell-level
+        # override via the gs_implicit_ad argument.
+        gs_implicit_ad=(
+            gs_implicit_ad if gs_implicit_ad is not None
+            else (ctmrg_mode == "svd")
+        ),
+        gs_explicit_ad_warmup=3,
+        # 20 unrolled CTM steps produces NaN gradient at chi=16 in new tenax;
+        # smoke-test confirmed 10 steps descends (E=-0.6334).  Phase-8b knob.
+        gs_explicit_ad_steps=10,
         gs_optimizer=optimizer,
         gs_num_steps=num_steps,
         gs_learning_rate=0.05 if optimizer == "adam" else 1e-3,
-        gs_conv_tol=1e-7,
+        # gs_conv_tol effectively 0: never trip the early-stop heuristic.
+        # With ``su_init=True`` the SU plateau causes delta_energy < 1e-7
+        # immediately; we want the full ``gs_num_steps`` budget instead.
+        gs_conv_tol=1e-15,
+        gs_max_grad_norm=2.0,
+        gs_line_search=None,             # auto: True for lbfgs / cg
+        gs_line_search_max_steps=8,
+        gs_line_search_method="hager_zhang",
+        # --- metric preconditioner (Rader arXiv:2511.09546) ---
+        gs_metric_precond=metric_precond and (optimizer == "lbfgs"),
+        metric_gmres_maxiter=30,
+        metric_gmres_tol=1e-2,
+        # --- C4v sublattice-rotation parametrisation (issue #328) ---
+        gs_c4v=gs_c4v,
+        gs_projector_method=None,        # inherit from ctm.projector_method
+        # --- stall recovery: "reset" mandatory under C4v; auto otherwise ---
+        gs_stall_recovery="reset" if gs_c4v else None,
+        gs_noise_recovery_retries=3,
+        gs_noise_amplitude=0.1,
+        gs_energy_floor=None,            # we sanity-check post-hoc instead
+        # --- diagnostics ---
         gs_verbose=False,
         gs_log_interval=1,
-        gs_metric_precond=metric_precond and (optimizer == "lbfgs"),
-        gs_max_grad_norm=2.0,
-        su_init=False,  # use random init for reproducibility across modes
-        gs_c4v=gs_c4v,
-        # gs_c4v=True requires "reset" stall recovery (the "noise" recovery
-        # path is incompatible with the C4v coefficient-vector parametrisation).
-        gs_stall_recovery="reset" if gs_c4v else None,
+        return_history=False,
     )
     return cfg
 
@@ -158,6 +232,8 @@ def run_cell(
     metric_precond: bool = False,
     gs_c4v: bool = False,
     chi_extrap: tuple[int, ...] = (),
+    su_init: bool = True,
+    gs_implicit_ad: bool | None = None,
 ) -> CellResult:
     """One (model, D, chi, ctmrg_mode, optimizer, seed) benchmark cell.
 
@@ -180,6 +256,7 @@ def run_cell(
         num_steps=num_steps,
         gs_c4v=gs_c4v,
         chi_extrap_targets=list(chi_extrap),
+        su_init=su_init,
     )
     res = CellResult(spec=spec)
 
@@ -191,22 +268,28 @@ def run_cell(
 
     gate = gate_for(model, h_or_J2)
     cfg = _build_config(
-        D, chi, ctmrg_mode, optimizer, unit_cell, num_steps, metric_precond, gs_c4v=gs_c4v
+        D, chi, ctmrg_mode, optimizer, unit_cell, num_steps, metric_precond,
+        gs_c4v=gs_c4v, su_init=su_init, gs_implicit_ad=gs_implicit_ad,
     )
 
-    # Random init — same seed for both ctmrg_modes so they see the same start.
-    key = jax.random.PRNGKey(seed)
-    if unit_cell == "1x1":
-        k1, k2 = jax.random.split(key)
-        A = jax.random.normal(k1, (D, D, D, D, 2)) + 1j * jax.random.normal(k2, (D, D, D, D, 2))
-        # Real init is enough; for TFIM the gate is real.
-        A = jnp.real(A).astype(jnp.float64)
-        A_init: Any = A
+    # Init: when su_init=True we let optimize_gs_ad seed the tensor via
+    # ipeps() simple update; otherwise fall back to deterministic random
+    # init for cross-mode reproducibility.
+    A_init: Any
+    if su_init:
+        A_init = None
     else:
-        keys = jax.random.split(key, 4)
-        A = jax.random.normal(keys[0], (D, D, D, D, 2)).astype(jnp.float64)
-        B = jax.random.normal(keys[1], (D, D, D, D, 2)).astype(jnp.float64)
-        A_init = (A, B)
+        key = jax.random.PRNGKey(seed)
+        if unit_cell == "1x1":
+            k1, k2 = jax.random.split(key)
+            A = jax.random.normal(k1, (D, D, D, D, 2)) + 1j * jax.random.normal(k2, (D, D, D, D, 2))
+            A = jnp.real(A).astype(jnp.float64)
+            A_init = A
+        else:
+            keys = jax.random.split(key, 4)
+            A = jax.random.normal(keys[0], (D, D, D, D, 2)).astype(jnp.float64)
+            B = jax.random.normal(keys[1], (D, D, D, D, 2)).astype(jnp.float64)
+            A_init = (A, B)
 
     last_energy = [None]
     step_t0 = [time.perf_counter()]
@@ -323,7 +406,7 @@ def _ctm_post_check(tensors, ctmrg_mode: str, chi: int, unit_cell: str, res: Cel
 
     if unit_cell == "1x1":
         site_tensors = {(0, 0): tensors[0]}
-        neighbors = {(0, 0): {"left": (0, 0), "right": (0, 0), "up": (0, 0), "down": (0, 0)}}
+        neighbors = {(0, 0): {"left": (0, 0), "right": (0, 0), "top": (0, 0), "bottom": (0, 0)}}
     else:
         site_tensors = {(0, 0): tensors[0], (1, 0): tensors[1]}
         neighbors = CHECKERBOARD_NEIGHBORS
@@ -345,8 +428,10 @@ def _ctm_post_check(tensors, ctmrg_mode: str, chi: int, unit_cell: str, res: Cel
     res.ctm_sv_diff_post = float(info.sv_diff)
 
     # One further sweep to measure the fixed-point residual ‖F(C★) − C★‖.
+    # Post-PR #341 in tenax, ``_make_jit_ctm_step`` returns
+    # ``(new_envs, max_truncation_error)``; we only need ``new_envs`` here.
     jit_step = _make_jit_ctm_step(neighbors)
-    envs_next = jit_step(
+    step_out = jit_step(
         site_tensors,
         envs,
         chi=chi,
@@ -354,6 +439,7 @@ def _ctm_post_check(tensors, ctmrg_mode: str, chi: int, unit_cell: str, res: Cel
         renormalize=True,
         projector_backward="auto",
     )
+    envs_next = step_out[0] if isinstance(step_out, tuple) else step_out
     residual = 0.0
     for c in envs:
         residual = max(residual, _max_env_leaf_diff(envs[c], envs_next[c]))
@@ -391,7 +477,7 @@ def _chi_extrap_check(
 
     if unit_cell == "1x1":
         site_tensors = {(0, 0): tensors[0]}
-        neighbors = {(0, 0): {"left": (0, 0), "right": (0, 0), "up": (0, 0), "down": (0, 0)}}
+        neighbors = {(0, 0): {"left": (0, 0), "right": (0, 0), "top": (0, 0), "bottom": (0, 0)}}
     else:
         site_tensors = {(0, 0): tensors[0], (1, 0): tensors[1]}
         neighbors = CHECKERBOARD_NEIGHBORS
@@ -412,9 +498,9 @@ def _chi_extrap_check(
                 projector_method=ctmrg_mode,
                 projector_backward="auto",
             )
-            # Fixed-point residual
+            # Fixed-point residual; new tenax returns (envs, eps_T) tuple.
             jit_step = _make_jit_ctm_step(neighbors)
-            envs_next = jit_step(
+            step_out = jit_step(
                 site_tensors,
                 envs,
                 chi=chi_int,
@@ -422,6 +508,7 @@ def _chi_extrap_check(
                 renormalize=True,
                 projector_backward="auto",
             )
+            envs_next = step_out[0] if isinstance(step_out, tuple) else step_out
             residual = 0.0
             for c in envs:
                 residual = max(residual, _max_env_leaf_diff(envs[c], envs_next[c]))

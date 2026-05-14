@@ -44,6 +44,33 @@ _MARKER = {
     "eigh": "^",
 }
 
+# Per-(mode, seed) palette: distinct color per line so the user can tell
+# seed 0 from seed 1 at a glance.  Wong colorblind-safe palette.
+_LINE_PALETTE = {
+    ("svd", 0):           "#0072B2",   # strong blue
+    ("svd", 1):           "#56B4E9",   # sky blue
+    ("svd", 2):           "#004C73",   # dark navy
+    ("qr_canonical", 0):  "#D55E00",   # vermilion (orange)
+    ("qr_canonical", 1):  "#E69F00",   # warm yellow
+    ("qr_canonical", 2):  "#8C3800",   # dark red-brown
+    ("eigh", 0):          "#117733",
+    ("eigh", 1):          "#44AA99",
+}
+# Optional metric-precond modifier: dashed when metric is on.
+_LINESTYLE_METRIC = {True: "--", False: "-"}
+
+
+def _line_key(r: dict) -> tuple:
+    return (r.get("ctmrg_mode"), int(r.get("seed", 0)))
+
+
+def _line_label(r: dict) -> str:
+    mode = r.get("ctmrg_mode", "?")
+    seed = r.get("seed", "?")
+    metric = "+ metric" if r.get("metric_precond") else ""
+    base = {"svd": "SVD", "qr_canonical": "QR-canonical", "eigh": "eigh"}.get(mode, mode)
+    return f"{base} seed{seed} {metric}".strip()
+
 
 def _load(grid_label: str) -> list[dict]:
     path = DATA_DIR / f"{grid_label}.jsonl"
@@ -113,38 +140,53 @@ def write_summary_csv(rows: list[dict], grid_label: str) -> Path:
     return out_path
 
 
-def plot_energy_trajectories(rows: list[dict], model: str, h_or_J2: float, grid_label: str) -> Path:
-    """For (model, h/J) plot energy vs step for both modes, all seeds."""
-    fig, ax = plt.subplots(figsize=(5.6, 4.0))
-    handled = set()
+def plot_energy_trajectories(rows: list[dict], model: str, h_or_J2: float, grid_label: str, chi: int = 16) -> Path:
+    """Energy vs AD step.  One distinct color per (ctmrg_mode, seed); dashed when metric=on.
+
+    Plots ALL ok cells matching (model, h_or_J2), including the metric-
+    preconditioned variants (drawn dashed) so the figure is self-contained.
+    """
+    fig, ax = plt.subplots(figsize=(6.0, 4.2))
+    n_lines = 0
     for r in rows:
         if r.get("model") != model or round(r.get("h_or_J2", 0.0), 4) != round(h_or_J2, 4):
             continue
-        if r.get("optimizer") != "lbfgs" or r.get("metric_precond"):
+        if r.get("optimizer") != "lbfgs":
             continue
-        if r.get("status") not in ("ok",):
+        if r.get("status") != "ok":
             continue
         e = r.get("energies") or []
         if not e:
             continue
         mode = r["ctmrg_mode"]
+        seed = int(r.get("seed", 0))
+        metric = bool(r.get("metric_precond"))
         ax.plot(
             range(1, len(e) + 1),
             e,
-            "-" + _MARKER.get(mode, "o"),
-            color=_PALETTE.get(mode, "k"),
-            label=_LABEL.get(mode, mode) if mode not in handled else None,
-            markersize=4,
-            alpha=0.85,
+            _LINESTYLE_METRIC[metric] + _MARKER.get(mode, "o"),
+            color=_LINE_PALETTE.get((mode, seed), "k"),
+            label=_line_label(r),
+            markersize=5,
+            linewidth=1.6,
+            alpha=0.95,
         )
-        handled.add(mode)
+        n_lines += 1
+    if n_lines == 0:
+        plt.close(fig)
+        return FIG_DIR / f"{grid_label}_traj_{model}_{h_or_J2:.2f}_EMPTY.pdf"
     ax.set_xlabel("AD optimisation step")
-    ax.set_ylabel(r"$E_{\mathrm{var}}$")
+    ax.set_ylabel(r"$E_{\mathrm{var}}$ per site")
     title_suffix = (
-        f"$h/J={h_or_J2}$" if model == "tfim" else f"$J_2/J_1={h_or_J2}$" if model == "j1j2" else ""
+        f"$h/J={h_or_J2}$" if model == "tfim"
+        else f"$J_2/J_1={h_or_J2}$" if model == "j1j2"
+        else ""
     )
-    ax.set_title(f"{model.upper()} energy trajectory  {title_suffix}\n($D=2$, $\\chi=8$, L-BFGS, all seeds)")
-    ax.legend(loc="best", fontsize=9)
+    ax.set_title(
+        f"{model.upper()} energy trajectory  {title_suffix}\n"
+        f"(fixed: $D=2$, $\\chi={chi}$, L-BFGS; varying: ctmrg mode, seed, metric-precond)"
+    )
+    ax.legend(loc="best", fontsize=8, framealpha=0.85)
     ax.grid(True, alpha=0.3)
     out = FIG_DIR / f"{grid_label}_traj_{model}_{h_or_J2:.2f}.pdf"
     fig.tight_layout()
@@ -153,39 +195,50 @@ def plot_energy_trajectories(rows: list[dict], model: str, h_or_J2: float, grid_
     return out
 
 
-def plot_gradient_stability(rows: list[dict], model: str, h_or_J2: float, grid_label: str) -> Path:
-    """Plot log10(||∇E||) vs step, both modes, all seeds, plain L-BFGS."""
-    fig, ax = plt.subplots(figsize=(5.6, 4.0))
-    handled = set()
+def plot_gradient_stability(rows: list[dict], model: str, h_or_J2: float, grid_label: str, chi: int = 16) -> Path:
+    """log10 ‖∇E‖ vs AD step.  One color per (mode, seed); dashed when metric=on."""
+    fig, ax = plt.subplots(figsize=(6.0, 4.2))
+    n_lines = 0
     for r in rows:
         if r.get("model") != model or round(r.get("h_or_J2", 0.0), 4) != round(h_or_J2, 4):
             continue
-        if r.get("optimizer") != "lbfgs" or r.get("metric_precond"):
+        if r.get("optimizer") != "lbfgs":
             continue
-        if r.get("status") not in ("ok",):
+        if r.get("status") != "ok":
             continue
         gn = np.array(r.get("grad_norms") or [], dtype=float)
         if gn.size == 0:
             continue
-        gn = np.where(gn > 0, gn, 1e-30)
+        gn = np.where(np.isfinite(gn) & (gn > 0), gn, 1e-30)
         mode = r["ctmrg_mode"]
+        seed = int(r.get("seed", 0))
+        metric = bool(r.get("metric_precond"))
         ax.semilogy(
             range(1, len(gn) + 1),
             gn,
-            "-" + _MARKER.get(mode, "o"),
-            color=_PALETTE.get(mode, "k"),
-            label=_LABEL.get(mode, mode) if mode not in handled else None,
-            markersize=4,
-            alpha=0.85,
+            _LINESTYLE_METRIC[metric] + _MARKER.get(mode, "o"),
+            color=_LINE_PALETTE.get((mode, seed), "k"),
+            label=_line_label(r),
+            markersize=5,
+            linewidth=1.6,
+            alpha=0.95,
         )
-        handled.add(mode)
+        n_lines += 1
+    if n_lines == 0:
+        plt.close(fig)
+        return FIG_DIR / f"{grid_label}_grad_{model}_{h_or_J2:.2f}_EMPTY.pdf"
     ax.set_xlabel("AD optimisation step")
-    ax.set_ylabel(r"$\|\nabla E\|$")
+    ax.set_ylabel(r"$\|\nabla E\|$ (log scale)")
     title_suffix = (
-        f"$h/J={h_or_J2}$" if model == "tfim" else f"$J_2/J_1={h_or_J2}$" if model == "j1j2" else ""
+        f"$h/J={h_or_J2}$" if model == "tfim"
+        else f"$J_2/J_1={h_or_J2}$" if model == "j1j2"
+        else ""
     )
-    ax.set_title(f"{model.upper()} gradient norm  {title_suffix}\n($D=2$, $\\chi=8$, L-BFGS)")
-    ax.legend(loc="best", fontsize=9)
+    ax.set_title(
+        f"{model.upper()} gradient norm  {title_suffix}\n"
+        f"(fixed: $D=2$, $\\chi={chi}$, L-BFGS; varying: ctmrg mode, seed, metric-precond)"
+    )
+    ax.legend(loc="best", fontsize=8, framealpha=0.85)
     ax.grid(True, alpha=0.3, which="both")
     out = FIG_DIR / f"{grid_label}_grad_{model}_{h_or_J2:.2f}.pdf"
     fig.tight_layout()
@@ -194,7 +247,7 @@ def plot_gradient_stability(rows: list[dict], model: str, h_or_J2: float, grid_l
     return out
 
 
-def plot_2x2_interaction(rows: list[dict], grid_label: str, model: str = "j1j2", h_or_J2: float = 0.5) -> Path:
+def plot_2x2_interaction(rows: list[dict], grid_label: str, model: str = "j1j2", h_or_J2: float = 0.5, chi: int = 16) -> Path:
     """RQ5: 2x2 design (SVD/QR x plain/metric LBFGS).
 
     Bar chart of mean final energy with seed-level dots overlaid.
@@ -242,7 +295,10 @@ def plot_2x2_interaction(rows: list[dict], grid_label: str, model: str = "j1j2",
     title_suffix = (
         f"$h/J={h_or_J2}$" if model == "tfim" else f"$J_2/J_1={h_or_J2}$" if model == "j1j2" else ""
     )
-    ax.set_title(f"RQ5: 2$\\times$2 interaction at {model.upper()} {title_suffix}\n($D=2$, $\\chi=8$)")
+    ax.set_title(
+        f"RQ5: 2$\\times$2 interaction at {model.upper()} {title_suffix}\n"
+        f"(fixed: $D=2$, $\\chi={chi}$, model; varying: ctmrg mode, metric-precond)"
+    )
     ax.legend(loc="best", fontsize=9)
     ax.grid(True, alpha=0.3, axis="y")
     out = FIG_DIR / f"{grid_label}_2x2_interaction.pdf"
@@ -354,7 +410,10 @@ def plot_wallclock(rows: list[dict], grid_label: str) -> Path:
     ax.set_xticks(x_pos)
     ax.set_xticklabels([m.upper() for m in models])
     ax.set_ylabel("wall-clock per AD step (s)")
-    ax.set_title("Per-step wall-clock CPU time\n($D=2$, $\\chi=8$, L-BFGS, plain)")
+    ax.set_title(
+        f"Per-step wall-clock CPU time\n"
+        f"(fixed: $D=2$, L-BFGS-plain; varying: model, ctmrg mode)"
+    )
     ax.legend(loc="best", fontsize=9)
     ax.grid(True, alpha=0.3, axis="y")
     out = FIG_DIR / f"{grid_label}_wallclock.pdf"
@@ -367,6 +426,7 @@ def plot_wallclock(rows: list[dict], grid_label: str) -> Path:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("grid_label")
+    ap.add_argument("--chi", type=int, default=16, help="environment chi for figure captions")
     args = ap.parse_args()
     rows = _load(args.grid_label)
     n_ok = sum(1 for r in rows if r.get("status") == "ok")
@@ -378,14 +438,14 @@ def main():
     figs = []
     for (m, h) in [("heisenberg", 0.0), ("j1j2", 0.0), ("j1j2", 0.5), ("tfim", 2.5), ("tfim", 3.04), ("tfim", 3.5)]:
         try:
-            figs.append(plot_energy_trajectories(rows, m, h, args.grid_label))
+            figs.append(plot_energy_trajectories(rows, m, h, args.grid_label, chi=args.chi))
         except Exception as e:  # noqa: BLE001
             print(f"  skip energy {m} {h}: {e}")
         try:
-            figs.append(plot_gradient_stability(rows, m, h, args.grid_label))
+            figs.append(plot_gradient_stability(rows, m, h, args.grid_label, chi=args.chi))
         except Exception as e:  # noqa: BLE001
             print(f"  skip grad {m} {h}: {e}")
-    figs.append(plot_2x2_interaction(rows, args.grid_label))
+    figs.append(plot_2x2_interaction(rows, args.grid_label, chi=args.chi))
     figs.append(plot_wallclock(rows, args.grid_label))
     try:
         figs.append(plot_chi_extrap(rows, args.grid_label))

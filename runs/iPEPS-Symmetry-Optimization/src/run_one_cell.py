@@ -42,6 +42,8 @@ def main():
             metric_precond=bool(spec.get("metric_precond", False)),
             gs_c4v=bool(spec.get("gs_c4v", False)),
             chi_extrap=tuple(spec.get("chi_extrap", []) or []),
+            su_init=bool(spec.get("su_init", True)),
+            gs_implicit_ad=spec.get("gs_implicit_ad"),
         )
         rec = r.to_dict()
         rec["status"] = "ok" if r.error is None else "error"
